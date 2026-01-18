@@ -9,9 +9,13 @@ from pathlib import Path
 from typing import Any
 
 # Add project root to path for Vercel serverless functions
-project_root = Path(__file__).parent.parent
-if str(project_root) not in sys.path:
-    sys.path.insert(0, str(project_root))
+project_root = Path(__file__).parent.parent.resolve()
+sys.path.insert(0, str(project_root))
+
+# Debug: Print path info
+print(f"Project root: {project_root}")
+print(f"sys.path: {sys.path[:3]}")
+print(f"Files in project root: {list(project_root.iterdir())[:10]}")
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -20,13 +24,21 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
 
-from src.calculators.unified_score import UnifiedScoreCalculator, WeightPresets
-from src.clients.apify import ApifyClient
-from src.clients.dataforseo import DataForSEOClient
-from src.config import get_settings
-from src.db.repository import KeywordRepository
-from src.models.keyword import Platform, UnifiedKeywordData
-from src.pipeline.keyword_pipeline import KeywordPipeline, PipelineOptions
+try:
+    from src.calculators.unified_score import UnifiedScoreCalculator, WeightPresets
+    from src.clients.apify import ApifyClient
+    from src.clients.dataforseo import DataForSEOClient
+    from src.config import get_settings
+    from src.db.repository import KeywordRepository
+    from src.models.keyword import Platform, UnifiedKeywordData
+    from src.pipeline.keyword_pipeline import KeywordPipeline, PipelineOptions
+    IMPORTS_OK = True
+    IMPORT_ERROR = None
+except Exception as e:
+    import traceback
+    IMPORTS_OK = False
+    IMPORT_ERROR = traceback.format_exc()
+    print(f"Import error: {IMPORT_ERROR}")
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -56,9 +68,14 @@ try:
 except Exception:
     pass
 
-# Initialize repository
-repo = KeywordRepository()
-repo.create_tables()
+# Initialize repository (only if imports succeeded)
+repo = None
+if IMPORTS_OK:
+    try:
+        repo = KeywordRepository()
+        repo.create_tables()
+    except Exception as e:
+        print(f"Repository init error: {e}")
 
 # Background task storage
 research_tasks: dict[str, dict] = {}
@@ -115,6 +132,14 @@ async def dashboard(request: Request):
 @app.get("/api/health")
 async def health_check():
     """Health check endpoint."""
+    if not IMPORTS_OK:
+        return {
+            "status": "error",
+            "imports_ok": False,
+            "error": IMPORT_ERROR,
+            "project_root": str(project_root),
+            "sys_path": sys.path[:5],
+        }
     return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
 
 
