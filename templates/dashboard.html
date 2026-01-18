@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Total Search - Keyword Research Tool</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen" x-data="dashboard()">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex items-center justify-between">
+            <div class="flex items-center space-x-3">
+                <i class="fas fa-search-dollar text-2xl text-blue-500"></i>
+                <h1 class="text-xl font-bold">Total Search</h1>
+                <span class="text-xs bg-blue-600 px-2 py-1 rounded">Beta</span>
+            </div>
+            <div class="flex items-center space-x-4">
+                <span class="text-sm text-gray-400">Multi-Platform Keyword Research</span>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Stats Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Total Keywords</p>
+                        <p class="text-2xl font-bold">{{ stats.total_keywords or 0 }}</p>
+                    </div>
+                    <i class="fas fa-key text-blue-500 text-2xl"></i>
+                </div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Total Metrics</p>
+                        <p class="text-2xl font-bold">{{ stats.total_metrics or 0 }}</p>
+                    </div>
+                    <i class="fas fa-chart-bar text-green-500 text-2xl"></i>
+                </div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">Platforms</p>
+                        <p class="text-2xl font-bold">5</p>
+                    </div>
+                    <i class="fas fa-globe text-purple-500 text-2xl"></i>
+                </div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-gray-400 text-sm">API Status</p>
+                        <p class="text-2xl font-bold text-green-500">Active</p>
+                    </div>
+                    <i class="fas fa-circle text-green-500 text-2xl animate-pulse"></i>
+                </div>
+            </div>
+        </div>
+
+        <!-- Research Form -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
+            <h2 class="text-lg font-semibold mb-4">
+                <i class="fas fa-search mr-2 text-blue-500"></i>
+                New Keyword Research
+            </h2>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">Keywords (one per line or comma-separated)</label>
+                    <textarea
+                        x-model="keywords"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                        rows="3"
+                        placeholder="Enter keywords to research...&#10;e.g., vitamin c serum, retinol, hyaluronic acid"
+                    ></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Platforms</label>
+                        <div class="flex flex-wrap gap-2">
+                            <template x-for="platform in availablePlatforms" :key="platform.id">
+                                <button
+                                    @click="togglePlatform(platform.id)"
+                                    :class="selectedPlatforms.includes(platform.id) ? 'bg-blue-600 border-blue-500' : 'bg-gray-700 border-gray-600'"
+                                    class="px-3 py-1 rounded-full text-sm border flex items-center space-x-1 transition-colors"
+                                >
+                                    <i :class="platform.icon"></i>
+                                    <span x-text="platform.name"></span>
+                                </button>
+                            </template>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm text-gray-400 mb-2">Weight Preset</label>
+                        <select
+                            x-model="weightPreset"
+                            class="w-full bg-gray-700 border border-gray-600 rounded-lg p-2 text-white focus:outline-none focus:border-blue-500"
+                        >
+                            <option value="balanced">Balanced (All platforms equal)</option>
+                            <option value="seo">SEO Focus (Google weighted)</option>
+                            <option value="ecommerce">E-commerce (Amazon weighted)</option>
+                            <option value="content">Content Creator (Social weighted)</option>
+                            <option value="video">Video Focus (YouTube/TikTok weighted)</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex items-center justify-between">
+                    <p class="text-sm text-gray-500">
+                        <span x-text="keywordCount"></span> keywords •
+                        <span x-text="selectedPlatforms.length"></span> platforms
+                    </p>
+                    <button
+                        @click="startResearch"
+                        :disabled="isLoading || keywordCount === 0"
+                        :class="isLoading || keywordCount === 0 ? 'bg-gray-600 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'"
+                        class="px-6 py-2 rounded-lg font-semibold transition-colors flex items-center space-x-2"
+                    >
+                        <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-rocket'"></i>
+                        <span x-text="isLoading ? 'Researching...' : 'Start Research'"></span>
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div x-show="results.length > 0" x-cloak class="bg-gray-800 rounded-lg p-6 border border-gray-700 mb-8">
+            <h2 class="text-lg font-semibold mb-4">
+                <i class="fas fa-chart-line mr-2 text-green-500"></i>
+                Research Results
+            </h2>
+
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-gray-400 text-sm border-b border-gray-700">
+                            <th class="pb-3">Keyword</th>
+                            <th class="pb-3">Score</th>
+                            <th class="pb-3">Trend</th>
+                            <th class="pb-3">Best Platform</th>
+                            <th class="pb-3">Platforms</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <template x-for="(result, index) in results" :key="index">
+                            <tr class="border-b border-gray-700 hover:bg-gray-750">
+                                <td class="py-3 font-medium" x-text="result.keyword"></td>
+                                <td class="py-3">
+                                    <div class="flex items-center space-x-2">
+                                        <div class="w-16 bg-gray-700 rounded-full h-2">
+                                            <div
+                                                class="h-2 rounded-full"
+                                                :class="result.unified_demand_score > 60 ? 'bg-green-500' : result.unified_demand_score > 30 ? 'bg-yellow-500' : 'bg-red-500'"
+                                                :style="`width: ${result.unified_demand_score}%`"
+                                            ></div>
+                                        </div>
+                                        <span class="text-sm" x-text="result.unified_demand_score + '/100'"></span>
+                                    </div>
+                                </td>
+                                <td class="py-3">
+                                    <span
+                                        :class="{
+                                            'text-green-500': result.cross_platform_trend === 'growing',
+                                            'text-yellow-500': result.cross_platform_trend === 'stable',
+                                            'text-red-500': result.cross_platform_trend === 'declining'
+                                        }"
+                                        class="flex items-center space-x-1"
+                                    >
+                                        <i :class="{
+                                            'fas fa-arrow-up': result.cross_platform_trend === 'growing',
+                                            'fas fa-minus': result.cross_platform_trend === 'stable',
+                                            'fas fa-arrow-down': result.cross_platform_trend === 'declining'
+                                        }"></i>
+                                        <span x-text="result.cross_platform_trend || 'N/A'"></span>
+                                    </span>
+                                </td>
+                                <td class="py-3">
+                                    <span class="px-2 py-1 bg-gray-700 rounded text-sm" x-text="result.best_platform || 'N/A'"></span>
+                                </td>
+                                <td class="py-3">
+                                    <div class="flex space-x-1">
+                                        <template x-for="(data, platform) in result.platforms || {}" :key="platform">
+                                            <span
+                                                class="w-6 h-6 flex items-center justify-center rounded text-xs"
+                                                :class="data.volume > 0 ? 'bg-green-600' : 'bg-gray-600'"
+                                                :title="platform + ': ' + (data.volume || 0)"
+                                            >
+                                                <span x-text="platform.charAt(0).toUpperCase()"></span>
+                                            </span>
+                                        </template>
+                                    </div>
+                                </td>
+                            </tr>
+                        </template>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Recent Keywords -->
+        <div class="bg-gray-800 rounded-lg p-6 border border-gray-700">
+            <h2 class="text-lg font-semibold mb-4">
+                <i class="fas fa-history mr-2 text-purple-500"></i>
+                Recent Keywords
+            </h2>
+
+            {% if keywords %}
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-gray-400 text-sm border-b border-gray-700">
+                            <th class="pb-3">Keyword</th>
+                            <th class="pb-3">Score</th>
+                            <th class="pb-3">Trend</th>
+                            <th class="pb-3">Best Platform</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for kw in keywords %}
+                        <tr class="border-b border-gray-700 hover:bg-gray-750">
+                            <td class="py-3 font-medium">{{ kw.keyword }}</td>
+                            <td class="py-3">
+                                <div class="flex items-center space-x-2">
+                                    <div class="w-16 bg-gray-700 rounded-full h-2">
+                                        <div
+                                            class="h-2 rounded-full {% if kw.unified_demand_score > 60 %}bg-green-500{% elif kw.unified_demand_score > 30 %}bg-yellow-500{% else %}bg-red-500{% endif %}"
+                                            style="width: {{ kw.unified_demand_score }}%"
+                                        ></div>
+                                    </div>
+                                    <span class="text-sm">{{ kw.unified_demand_score }}/100</span>
+                                </div>
+                            </td>
+                            <td class="py-3">
+                                {% if kw.cross_platform_trend %}
+                                <span class="{% if kw.cross_platform_trend.value == 'growing' %}text-green-500{% elif kw.cross_platform_trend.value == 'stable' %}text-yellow-500{% else %}text-red-500{% endif %}">
+                                    {{ kw.cross_platform_trend.value }}
+                                </span>
+                                {% else %}
+                                <span class="text-gray-500">N/A</span>
+                                {% endif %}
+                            </td>
+                            <td class="py-3">
+                                {% if kw.best_platform %}
+                                <span class="px-2 py-1 bg-gray-700 rounded text-sm">{{ kw.best_platform.value }}</span>
+                                {% else %}
+                                <span class="text-gray-500">N/A</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% else %}
+            <p class="text-gray-500 text-center py-8">No keywords researched yet. Start your first research above!</p>
+            {% endif %}
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 border-t border-gray-700 mt-12">
+        <div class="max-w-7xl mx-auto px-4 py-6 text-center text-gray-500 text-sm">
+            <p>Total Search © 2026 • Multi-Platform Keyword Research Tool</p>
+            <p class="mt-1">Powered by DataForSEO, Apify, and Jungle Scout APIs</p>
+        </div>
+    </footer>
+
+    <script>
+        function dashboard() {
+            return {
+                keywords: '',
+                selectedPlatforms: ['google', 'youtube'],
+                weightPreset: 'balanced',
+                isLoading: false,
+                results: [],
+                availablePlatforms: [
+                    { id: 'google', name: 'Google', icon: 'fab fa-google' },
+                    { id: 'youtube', name: 'YouTube', icon: 'fab fa-youtube' },
+                    { id: 'tiktok', name: 'TikTok', icon: 'fab fa-tiktok' },
+                    { id: 'instagram', name: 'Instagram', icon: 'fab fa-instagram' },
+                ],
+
+                get keywordCount() {
+                    if (!this.keywords.trim()) return 0;
+                    return this.keywords.split(/[,\n]/).filter(k => k.trim()).length;
+                },
+
+                togglePlatform(platformId) {
+                    const index = this.selectedPlatforms.indexOf(platformId);
+                    if (index > -1) {
+                        if (this.selectedPlatforms.length > 1) {
+                            this.selectedPlatforms.splice(index, 1);
+                        }
+                    } else {
+                        this.selectedPlatforms.push(platformId);
+                    }
+                },
+
+                async startResearch() {
+                    if (this.keywordCount === 0 || this.isLoading) return;
+
+                    this.isLoading = true;
+                    this.results = [];
+
+                    const keywordList = this.keywords.split(/[,\n]/)
+                        .map(k => k.trim())
+                        .filter(k => k);
+
+                    try {
+                        const response = await fetch('/api/research/quick?' + new URLSearchParams({
+                            keywords: keywordList.join(','),
+                            platforms: this.selectedPlatforms.join(',')
+                        }));
+
+                        if (!response.ok) {
+                            throw new Error('Research failed');
+                        }
+
+                        const data = await response.json();
+                        this.results = data.keywords || [];
+
+                    } catch (error) {
+                        alert('Research failed: ' + error.message);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                }
+            }
+        }
+    </script>
+</body>
+</html>

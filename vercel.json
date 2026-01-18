@@ -1,0 +1,25 @@
+{
+  "version": 2,
+  "builds": [
+    {
+      "src": "api/main.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/static/(.*)",
+      "dest": "/static/$1"
+    },
+    {
+      "src": "/(.*)",
+      "dest": "/api/main.py"
+    }
+  ],
+  "env": {
+    "DATAFORSEO_LOGIN": "@dataforseo-login",
+    "DATAFORSEO_PASSWORD": "@dataforseo-password",
+    "APIFY_API_TOKEN": "@apify-token",
+    "DATABASE_URL": "sqlite:///tmp/keywords.db"
+  }
+}
