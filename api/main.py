@@ -3,8 +3,15 @@
 import asyncio
 import json
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
 from typing import Any
+
+# Add project root to path for Vercel serverless functions
+project_root = Path(__file__).parent.parent
+if str(project_root) not in sys.path:
+    sys.path.insert(0, str(project_root))
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -38,11 +45,14 @@ app.add_middleware(
 )
 
 # Templates and static files
-templates = Jinja2Templates(directory="templates")
+templates_dir = project_root / "templates"
+templates = Jinja2Templates(directory=str(templates_dir))
 
 # Try to mount static files (may not exist in serverless)
 try:
-    app.mount("/static", StaticFiles(directory="static"), name="static")
+    static_dir = project_root / "static"
+    if static_dir.exists():
+        app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 except Exception:
     pass
 
