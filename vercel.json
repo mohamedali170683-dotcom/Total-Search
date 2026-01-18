@@ -15,11 +15,5 @@
       "src": "/(.*)",
       "dest": "/api/main.py"
     }
-  ],
-  "env": {
-    "DATAFORSEO_LOGIN": "@dataforseo-login",
-    "DATAFORSEO_PASSWORD": "@dataforseo-password",
-    "APIFY_API_TOKEN": "@apify-token",
-    "DATABASE_URL": "sqlite:///tmp/keywords.db"
-  }
+  ]
 }
