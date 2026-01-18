@@ -1,0 +1,56 @@
+# Git
+.git
+.gitignore
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+.venv
+venv
+ENV
+.eggs
+*.egg-info
+.pytest_cache
+.mypy_cache
+.ruff_cache
+
+# IDE
+.vscode
+.idea
+*.swp
+*.swo
+
+# Data (mount as volume instead)
+data/output/*
+data/checkpoints/*
+!data/output/.gitkeep
+!data/checkpoints/.gitkeep
+
+# Environment
+.env
+.env.local
+*.env
+
+# Testing
+htmlcov
+.coverage
+coverage.xml
+
+# Documentation
+docs/_build
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docker
+Dockerfile*
+docker-compose*.yml
+.docker
+
+# Misc
+*.log
+*.tmp

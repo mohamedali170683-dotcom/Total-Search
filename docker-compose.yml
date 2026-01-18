@@ -1,0 +1,137 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  db:
+    image: postgres:15-alpine
+    container_name: keyword-tool-db
+    environment:
+      POSTGRES_USER: keyword_user
+      POSTGRES_PASSWORD: keyword_pass
+      POSTGRES_DB: keyword_tool
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keyword_user -d keyword_tool"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Redis for caching (optional)
+  redis:
+    image: redis:7-alpine
+    container_name: keyword-tool-redis
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Main application
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: keyword-tool-app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://keyword_user:keyword_pass@db:5432/keyword_tool
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=true
+      - LOG_LEVEL=INFO
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    command: ["python", "scripts/run_pipeline.py", "--help"]
+
+  # Run pipeline job
+  pipeline:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: keyword-tool-pipeline
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://keyword_user:keyword_pass@db:5432/keyword_tool
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=true
+      - LOG_LEVEL=INFO
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    profiles:
+      - pipeline
+    command: >
+      python scripts/run_pipeline.py
+      --input /app/data/input/keywords.csv
+      --output /app/data/output
+      --save-to-db
+
+  # Export job
+  export:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: production
+    container_name: keyword-tool-export
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      - DATABASE_URL=postgresql://keyword_user:keyword_pass@db:5432/keyword_tool
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+    profiles:
+      - export
+    command: >
+      python scripts/export_for_rag.py
+      --format jsonl
+      --output /app/data/output/keywords_export.jsonl
+
+  # Development container
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: development
+    container_name: keyword-tool-dev
+    depends_on:
+      - db
+      - redis
+    environment:
+      - DATABASE_URL=postgresql://keyword_user:keyword_pass@db:5432/keyword_tool
+      - REDIS_URL=redis://redis:6379/0
+      - REDIS_ENABLED=true
+      - LOG_LEVEL=DEBUG
+    env_file:
+      - .env
+    volumes:
+      - .:/app
+      - /app/.venv  # Exclude virtual environment
+    profiles:
+      - dev
+    command: ["tail", "-f", "/dev/null"]  # Keep container running
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  default:
+    name: keyword-tool-network
