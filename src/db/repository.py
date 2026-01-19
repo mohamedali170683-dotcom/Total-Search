@@ -33,9 +33,9 @@ class KeywordRepository:
         self._is_postgres = self.database_url.startswith("postgresql")
 
     def create_tables(self) -> None:
-        """Create all database tables."""
-        Base.metadata.create_all(self.engine)
-        logger.info("Database tables created")
+        """Create all database tables if they don't exist."""
+        Base.metadata.create_all(self.engine, checkfirst=True)
+        logger.info("Database tables created/verified")
 
     def drop_tables(self) -> None:
         """Drop all database tables."""
