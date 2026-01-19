@@ -120,23 +120,23 @@ class KeywordData(BaseModel):
 
 
 # API Endpoints
-@app.get("/", response_class=HTMLResponse)
+@app.get("/")
 async def dashboard(request: Request):
     """Render the main dashboard."""
-    # Handle case where repo is not initialized
-    if repo is None:
-        stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
-        keywords = []
-    else:
-        try:
-            stats = repo.get_statistics()
-            keywords = repo.get_all_keywords(limit=20)
-        except Exception as e:
-            print(f"Dashboard error: {e}")
+    try:
+        # Handle case where repo is not initialized
+        if repo is None:
             stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
             keywords = []
+        else:
+            try:
+                stats = repo.get_statistics()
+                keywords = repo.get_all_keywords(limit=20)
+            except Exception as e:
+                print(f"Dashboard error: {e}")
+                stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
+                keywords = []
 
-    try:
         return templates.TemplateResponse(
             "dashboard.html",
             {
