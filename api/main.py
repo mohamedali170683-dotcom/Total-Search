@@ -93,12 +93,15 @@ except Exception:
 
 # Initialize repository (only if imports succeeded)
 repo = None
+repo_error = None
 if IMPORTS_OK:
     try:
         repo = KeywordRepository()
         repo.create_tables()
     except Exception as e:
-        print(f"Repository init error: {e}")
+        import traceback
+        repo_error = traceback.format_exc()
+        print(f"Repository init error: {repo_error}")
 
 # Background task storage
 research_tasks: dict[str, dict] = {}
@@ -178,6 +181,7 @@ async def health_check():
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "repo_initialized": repo is not None,
+        "repo_error": repo_error,
         **templates_info,
     }
 
