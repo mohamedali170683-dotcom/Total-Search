@@ -58,7 +58,14 @@ app.add_middleware(
 
 # Templates and static files
 templates_dir = project_root / "templates"
-templates = Jinja2Templates(directory=str(templates_dir))
+print(f"Templates dir: {templates_dir}, exists: {templates_dir.exists()}")
+if templates_dir.exists():
+    templates = Jinja2Templates(directory=str(templates_dir))
+else:
+    # Fallback: try api/templates
+    api_templates_dir = Path(__file__).parent / "templates"
+    print(f"Trying API templates dir: {api_templates_dir}, exists: {api_templates_dir.exists()}")
+    templates = Jinja2Templates(directory=str(templates_dir))  # Will fail gracefully
 
 # Try to mount static files (may not exist in serverless)
 try:
@@ -116,8 +123,18 @@ class KeywordData(BaseModel):
 @app.get("/", response_class=HTMLResponse)
 async def dashboard(request: Request):
     """Render the main dashboard."""
-    stats = repo.get_statistics()
-    keywords = repo.get_all_keywords(limit=20)
+    # Handle case where repo is not initialized
+    if repo is None:
+        stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
+        keywords = []
+    else:
+        try:
+            stats = repo.get_statistics()
+            keywords = repo.get_all_keywords(limit=20)
+        except Exception as e:
+            print(f"Dashboard error: {e}")
+            stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
+            keywords = []
 
     return templates.TemplateResponse(
         "dashboard.html",
