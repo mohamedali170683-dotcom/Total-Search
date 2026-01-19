@@ -6,11 +6,23 @@
       "destination": "/static/$1"
     },
     {
-      "source": "/",
+      "source": "/api/:path*",
       "destination": "/api/main.py"
     },
     {
-      "source": "/:path*",
+      "source": "/home",
+      "destination": "/api/main.py"
+    },
+    {
+      "source": "/debug",
+      "destination": "/api/main.py"
+    },
+    {
+      "source": "/test-template",
+      "destination": "/api/main.py"
+    },
+    {
+      "source": "/test-simple-dashboard",
       "destination": "/api/main.py"
     }
   ],

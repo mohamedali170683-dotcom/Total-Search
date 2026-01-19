@@ -147,10 +147,6 @@ async def home_page(request: Request):
     )
 
 
-@app.get("/")
-async def root_page():
-    """Root page."""
-    return {"message": "Hello from root!", "status": "ok"}
 
 
 @app.get("/api/health")
