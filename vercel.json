@@ -1,10 +1,7 @@
 {
   "version": 2,
+  "outputDirectory": "public",
   "rewrites": [
-    {
-      "source": "/static/(.*)",
-      "destination": "/static/$1"
-    },
     {
       "source": "/api/:path*",
       "destination": "/api/main.py"
