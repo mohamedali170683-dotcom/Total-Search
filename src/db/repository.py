@@ -150,21 +150,52 @@ class KeywordRepository:
         platform: Platform,
         metrics: PlatformMetrics,
     ) -> None:
-        """Save platform-specific metrics."""
-        metric = KeywordMetric(
-            keyword_id=keyword_id,
-            platform=platform.value,
-            collected_date=datetime.utcnow().strftime("%Y-%m-%d"),
-            search_volume=metrics.search_volume,
-            proxy_score=metrics.proxy_score,
-            trend=metrics.trend.value if metrics.trend else None,
-            trend_velocity=metrics.trend_velocity,
-            competition=metrics.competition.value if metrics.competition else None,
-            cpc=metrics.cpc,
-            confidence=metrics.confidence.value,
-            raw_data=metrics.raw_data,
-        )
-        session.add(metric)
+        """Save platform-specific metrics using upsert."""
+        collected_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+        values = {
+            "keyword_id": keyword_id,
+            "platform": platform.value,
+            "collected_date": collected_date,
+            "search_volume": metrics.search_volume,
+            "proxy_score": metrics.proxy_score,
+            "trend": metrics.trend.value if metrics.trend else None,
+            "trend_velocity": metrics.trend_velocity,
+            "competition": metrics.competition.value if metrics.competition else None,
+            "cpc": metrics.cpc,
+            "confidence": metrics.confidence.value,
+            "raw_data": metrics.raw_data,
+        }
+
+        # Build the update set for upsert
+        update_set = {
+            "search_volume": values["search_volume"],
+            "proxy_score": values["proxy_score"],
+            "trend": values["trend"],
+            "trend_velocity": values["trend_velocity"],
+            "competition": values["competition"],
+            "cpc": values["cpc"],
+            "confidence": values["confidence"],
+            "raw_data": values["raw_data"],
+            "collected_at": datetime.utcnow(),
+        }
+
+        if self._is_postgres:
+            # PostgreSQL upsert using constraint name
+            stmt = pg_insert(KeywordMetric).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                constraint="idx_keyword_metrics_unique",
+                set_=update_set,
+            )
+        else:
+            # SQLite upsert
+            stmt = sqlite_insert(KeywordMetric).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["keyword_id", "platform", "collected_date"],
+                set_=update_set,
+            )
+
+        session.execute(stmt)
 
     def _save_unified_score(
         self,
@@ -172,7 +203,7 @@ class KeywordRepository:
         keyword_id: int,
         keyword_data: UnifiedKeywordData,
     ) -> None:
-        """Save unified score data."""
+        """Save unified score data using upsert."""
         platform_scores_json = None
         if keyword_data.platform_scores:
             platform_scores_json = [
@@ -186,15 +217,42 @@ class KeywordRepository:
                 for ps in keyword_data.platform_scores
             ]
 
-        unified = UnifiedScore(
-            keyword_id=keyword_id,
-            collected_date=datetime.utcnow().strftime("%Y-%m-%d"),
-            unified_demand_score=keyword_data.unified_demand_score,
-            cross_platform_trend=keyword_data.cross_platform_trend.value if keyword_data.cross_platform_trend else None,
-            best_platform=keyword_data.best_platform.value if keyword_data.best_platform else None,
-            platform_scores=platform_scores_json,
-        )
-        session.add(unified)
+        collected_date = datetime.utcnow().strftime("%Y-%m-%d")
+
+        values = {
+            "keyword_id": keyword_id,
+            "collected_date": collected_date,
+            "unified_demand_score": keyword_data.unified_demand_score,
+            "cross_platform_trend": keyword_data.cross_platform_trend.value if keyword_data.cross_platform_trend else None,
+            "best_platform": keyword_data.best_platform.value if keyword_data.best_platform else None,
+            "platform_scores": platform_scores_json,
+        }
+
+        # Build the update set for upsert
+        update_set = {
+            "unified_demand_score": values["unified_demand_score"],
+            "cross_platform_trend": values["cross_platform_trend"],
+            "best_platform": values["best_platform"],
+            "platform_scores": values["platform_scores"],
+            "collected_at": datetime.utcnow(),
+        }
+
+        if self._is_postgres:
+            # PostgreSQL upsert using constraint name
+            stmt = pg_insert(UnifiedScore).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                constraint="idx_unified_scores_unique",
+                set_=update_set,
+            )
+        else:
+            # SQLite upsert
+            stmt = sqlite_insert(UnifiedScore).values(**values)
+            stmt = stmt.on_conflict_do_update(
+                index_elements=["keyword_id", "collected_date"],
+                set_=update_set,
+            )
+
+        session.execute(stmt)
 
     def get_keyword(self, keyword: str) -> UnifiedKeywordData | None:
         """
