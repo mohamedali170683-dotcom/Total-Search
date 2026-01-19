@@ -1,6 +1,12 @@
 {
   "version": 2,
-  "outputDirectory": "public",
+  "redirects": [
+    {
+      "source": "/",
+      "destination": "/home",
+      "permanent": false
+    }
+  ],
   "rewrites": [
     {
       "source": "/api/:path*",
