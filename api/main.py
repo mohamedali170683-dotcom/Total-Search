@@ -154,7 +154,7 @@ async def dashboard(request: Request):
                 keywords = []
 
         return templates.TemplateResponse(
-            "dashboard.html",
+            "dashboard_simple.html",
             {
                 "request": request,
                 "stats": stats,

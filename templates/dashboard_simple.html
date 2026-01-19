@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Total Search - Keyword Research Tool</title>
+    <style>
+        * { box-sizing: border-box; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #111827;
+            color: #f3f4f6;
+            margin: 0;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; }
+        h1 { color: #60a5fa; }
+        .card {
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 20px;
+        }
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+        .stat-card {
+            background: #1f2937;
+            border: 1px solid #374151;
+            border-radius: 8px;
+            padding: 20px;
+        }
+        .stat-label { color: #9ca3af; font-size: 14px; }
+        .stat-value { font-size: 24px; font-weight: bold; margin-top: 5px; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #374151; }
+        th { color: #9ca3af; }
+        .badge {
+            display: inline-block;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            background: #374151;
+        }
+        .growing { color: #10b981; }
+        .stable { color: #f59e0b; }
+        .declining { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <header style="margin-bottom: 30px;">
+            <h1>Total Search</h1>
+            <p style="color: #9ca3af;">Multi-Platform Keyword Research Tool</p>
+        </header>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <div class="stat-label">Total Keywords</div>
+                <div class="stat-value">{{ stats.total_keywords or 0 }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Total Metrics</div>
+                <div class="stat-value">{{ stats.total_metrics or 0 }}</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">Platforms</div>
+                <div class="stat-value">5</div>
+            </div>
+            <div class="stat-card">
+                <div class="stat-label">API Status</div>
+                <div class="stat-value" style="color: #10b981;">Active</div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2>Recent Keywords</h2>
+            {% if keywords %}
+            <table>
+                <thead>
+                    <tr>
+                        <th>Keyword</th>
+                        <th>Score</th>
+                        <th>Trend</th>
+                        <th>Best Platform</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for kw in keywords %}
+                    <tr>
+                        <td>{{ kw.keyword }}</td>
+                        <td>{{ kw.unified_demand_score }}/100</td>
+                        <td>
+                            {% if kw.cross_platform_trend %}
+                            <span class="{{ kw.cross_platform_trend.value }}">{{ kw.cross_platform_trend.value }}</span>
+                            {% else %}
+                            <span style="color: #6b7280;">N/A</span>
+                            {% endif %}
+                        </td>
+                        <td>
+                            {% if kw.best_platform %}
+                            <span class="badge">{{ kw.best_platform.value }}</span>
+                            {% else %}
+                            <span style="color: #6b7280;">N/A</span>
+                            {% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p style="color: #9ca3af; text-align: center; padding: 40px;">
+                No keywords researched yet. Use the API to start researching keywords.
+            </p>
+            {% endif %}
+        </div>
+
+        <div class="card">
+            <h2>API Endpoints</h2>
+            <ul style="line-height: 2;">
+                <li><code>/api/health</code> - Health check</li>
+                <li><code>/api/stats</code> - Get statistics</li>
+                <li><code>/api/research/quick?keywords=word1,word2</code> - Quick research</li>
+                <li><code>/api/keywords</code> - List all keywords</li>
+            </ul>
+        </div>
+
+        <footer style="text-align: center; padding: 30px; color: #6b7280; font-size: 14px;">
+            Total Search © 2026 • Powered by DataForSEO & Apify
+        </footer>
+    </div>
+</body>
+</html>
