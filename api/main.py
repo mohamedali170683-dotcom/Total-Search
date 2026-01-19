@@ -218,6 +218,22 @@ async def health_check():
     }
 
 
+@app.get("/test-template")
+async def test_template(request: Request):
+    """Test minimal Jinja template."""
+    try:
+        return templates.TemplateResponse(
+            "test.html",
+            {"request": request, "stats": {"test": "value"}}
+        )
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "traceback": traceback.format_exc()}
+        )
+
+
 @app.get("/debug")
 async def debug_page():
     """Simple debug page without Jinja templates."""
