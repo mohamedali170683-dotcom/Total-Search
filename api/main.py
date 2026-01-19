@@ -56,6 +56,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+
+# Global exception handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    import traceback
+    error_details = traceback.format_exc()
+    return JSONResponse(
+        status_code=500,
+        content={
+            "error": str(exc),
+            "type": type(exc).__name__,
+            "path": str(request.url.path),
+            "traceback": error_details,
+        }
+    )
+
 # Templates and static files
 templates_dir = project_root / "templates"
 print(f"Templates dir: {templates_dir}, exists: {templates_dir.exists()}")
