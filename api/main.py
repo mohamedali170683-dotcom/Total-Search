@@ -234,6 +234,24 @@ async def test_template(request: Request):
         )
 
 
+@app.get("/test-simple-dashboard")
+async def test_simple_dashboard(request: Request):
+    """Test simple dashboard template."""
+    try:
+        stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
+        keywords = []
+        return templates.TemplateResponse(
+            "dashboard_simple.html",
+            {"request": request, "stats": stats, "keywords": keywords}
+        )
+    except Exception as e:
+        import traceback
+        return JSONResponse(
+            status_code=500,
+            content={"error": str(e), "traceback": traceback.format_exc()}
+        )
+
+
 @app.get("/debug")
 async def debug_page():
     """Simple debug page without Jinja templates."""
