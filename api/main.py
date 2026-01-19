@@ -344,50 +344,6 @@ async def run_research_task(
         research_tasks[task_id]["error"] = str(e)
 
 
-@app.get("/api/research/{task_id}")
-async def get_research_status(task_id: str):
-    """Get the status of a research task."""
-    if task_id not in research_tasks:
-        raise HTTPException(status_code=404, detail="Task not found")
-
-    return research_tasks[task_id]
-
-
-@app.get("/api/keywords")
-async def list_keywords(
-    limit: int = Query(default=50, le=500),
-    offset: int = Query(default=0, ge=0),
-):
-    """List all researched keywords."""
-    keywords = repo.get_all_keywords(limit=limit, offset=offset)
-
-    return {
-        "count": len(keywords),
-        "offset": offset,
-        "keywords": [
-            {
-                "keyword": kw.keyword,
-                "unified_demand_score": kw.unified_demand_score,
-                "cross_platform_trend": kw.cross_platform_trend.value if kw.cross_platform_trend else None,
-                "best_platform": kw.best_platform.value if kw.best_platform else None,
-                "tags": kw.tags,
-            }
-            for kw in keywords
-        ]
-    }
-
-
-@app.get("/api/keywords/{keyword}")
-async def get_keyword(keyword: str):
-    """Get detailed data for a specific keyword."""
-    kw_data = repo.get_keyword(keyword)
-
-    if not kw_data:
-        raise HTTPException(status_code=404, detail="Keyword not found")
-
-    return kw_data.to_rag_document()
-
-
 @app.get("/api/research/quick")
 async def quick_research(
     keywords: str = Query(..., description="Comma-separated keywords"),
@@ -440,6 +396,50 @@ async def quick_research(
 
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/research/{task_id}")
+async def get_research_status(task_id: str):
+    """Get the status of a research task."""
+    if task_id not in research_tasks:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    return research_tasks[task_id]
+
+
+@app.get("/api/keywords")
+async def list_keywords(
+    limit: int = Query(default=50, le=500),
+    offset: int = Query(default=0, ge=0),
+):
+    """List all researched keywords."""
+    keywords = repo.get_all_keywords(limit=limit, offset=offset)
+
+    return {
+        "count": len(keywords),
+        "offset": offset,
+        "keywords": [
+            {
+                "keyword": kw.keyword,
+                "unified_demand_score": kw.unified_demand_score,
+                "cross_platform_trend": kw.cross_platform_trend.value if kw.cross_platform_trend else None,
+                "best_platform": kw.best_platform.value if kw.best_platform else None,
+                "tags": kw.tags,
+            }
+            for kw in keywords
+        ]
+    }
+
+
+@app.get("/api/keywords/{keyword}")
+async def get_keyword(keyword: str):
+    """Get detailed data for a specific keyword."""
+    kw_data = repo.get_keyword(keyword)
+
+    if not kw_data:
+        raise HTTPException(status_code=404, detail="Keyword not found")
+
+    return kw_data.to_rag_document()
 
 
 @app.get("/api/export")
