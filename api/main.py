@@ -157,13 +157,49 @@ async def health_check():
             "project_root": str(project_root),
             "sys_path": sys.path[:5],
         }
+
+    # Check templates
+    templates_info = {}
+    try:
+        dashboard_path = templates_dir / "dashboard.html"
+        templates_info = {
+            "templates_dir": str(templates_dir),
+            "templates_exist": templates_dir.exists(),
+            "dashboard_exists": dashboard_path.exists(),
+            "templates_contents": list(templates_dir.iterdir()) if templates_dir.exists() else [],
+        }
+    except Exception as e:
+        templates_info = {"error": str(e)}
+
     return {
         "status": "healthy",
         "timestamp": datetime.utcnow().isoformat(),
         "repo_initialized": repo is not None,
-        "templates_dir": str(templates_dir),
-        "templates_exist": templates_dir.exists(),
+        **templates_info,
     }
+
+
+@app.get("/debug")
+async def debug_page():
+    """Simple debug page without Jinja templates."""
+    return HTMLResponse(content=f"""
+    <!DOCTYPE html>
+    <html>
+    <head><title>Debug - Total Search</title></head>
+    <body style="font-family: sans-serif; padding: 20px;">
+        <h1>Total Search - Debug Page</h1>
+        <p>This page renders without Jinja templates.</p>
+        <h2>System Info:</h2>
+        <ul>
+            <li>Imports OK: {IMPORTS_OK}</li>
+            <li>Repo initialized: {repo is not None}</li>
+            <li>Templates dir: {templates_dir}</li>
+            <li>Templates exist: {templates_dir.exists()}</li>
+        </ul>
+        <p><a href="/api/health">Health Check (JSON)</a></p>
+    </body>
+    </html>
+    """)
 
 
 @app.get("/api/stats")
