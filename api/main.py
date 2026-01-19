@@ -157,14 +157,25 @@ async def health_check():
             "project_root": str(project_root),
             "sys_path": sys.path[:5],
         }
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {
+        "status": "healthy",
+        "timestamp": datetime.utcnow().isoformat(),
+        "repo_initialized": repo is not None,
+        "templates_dir": str(templates_dir),
+        "templates_exist": templates_dir.exists(),
+    }
 
 
 @app.get("/api/stats")
 async def get_stats():
     """Get database statistics."""
-    stats = repo.get_statistics()
-    return stats
+    if repo is None:
+        return {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}, "error": "Repository not initialized"}
+    try:
+        stats = repo.get_statistics()
+        return stats
+    except Exception as e:
+        return {"error": str(e)}
 
 
 @app.post("/api/research", response_model=KeywordResearchResponse)
