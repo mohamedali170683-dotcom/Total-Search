@@ -142,10 +142,21 @@ class KeywordData(BaseModel):
 @app.get("/home")
 async def home_page(request: Request):
     """Render the main dashboard."""
-    stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
-    keywords = []
+    # Get real stats and keywords from database if available
+    if repo is not None:
+        try:
+            stats = repo.get_statistics()
+            keywords = repo.get_all_keywords(limit=20)
+        except Exception as e:
+            print(f"Dashboard error: {e}")
+            stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
+            keywords = []
+    else:
+        stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
+        keywords = []
+
     return templates.TemplateResponse(
-        "dashboard_simple.html",
+        "dashboard.html",
         {"request": request, "stats": stats, "keywords": keywords}
     )
 
