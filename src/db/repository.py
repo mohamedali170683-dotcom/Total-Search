@@ -22,6 +22,12 @@ class KeywordRepository:
     def __init__(self, database_url: str | None = None, settings: Settings | None = None):
         settings = settings or get_settings()
         self.database_url = database_url or settings.database_url
+
+        # Fix for Vercel/Heroku: convert postgres:// to postgresql://
+        # SQLAlchemy 1.4+ requires postgresql:// scheme
+        if self.database_url.startswith("postgres://"):
+            self.database_url = self.database_url.replace("postgres://", "postgresql://", 1)
+
         self.engine = create_engine(self.database_url, echo=False)
         self.SessionLocal = sessionmaker(bind=self.engine)
         self._is_postgres = self.database_url.startswith("postgresql")
