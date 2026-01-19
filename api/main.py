@@ -136,8 +136,8 @@ class KeywordData(BaseModel):
 
 
 # API Endpoints
-@app.get("/")
-async def dashboard(request: Request):
+@app.get("/home")
+async def home_page(request: Request):
     """Render the main dashboard."""
     stats = {"total_keywords": 0, "total_metrics": 0, "metrics_by_platform": {}}
     keywords = []
@@ -145,6 +145,13 @@ async def dashboard(request: Request):
         "dashboard_simple.html",
         {"request": request, "stats": stats, "keywords": keywords}
     )
+
+
+@app.get("/")
+async def root_redirect():
+    """Redirect root to home."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/home")
 
 
 @app.get("/api/health")
