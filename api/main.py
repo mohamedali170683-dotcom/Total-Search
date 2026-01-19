@@ -148,10 +148,9 @@ async def home_page(request: Request):
 
 
 @app.get("/")
-async def root_redirect():
-    """Redirect root to home."""
-    from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/home")
+async def root_page():
+    """Root page."""
+    return {"message": "Hello from root!", "status": "ok"}
 
 
 @app.get("/api/health")
