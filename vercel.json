@@ -6,7 +6,11 @@
       "destination": "/static/$1"
     },
     {
-      "source": "/(.*)",
+      "source": "/",
+      "destination": "/api/main.py"
+    },
+    {
+      "source": "/:path*",
       "destination": "/api/main.py"
     }
   ],
