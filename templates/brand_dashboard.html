@@ -639,15 +639,16 @@
                 async refreshBrandData() {
                     if (!this.selectedBrand) return;
                     this.isLoading = true;
-                    this.refreshStatus = 'Researching keywords...';
+                    this.refreshStatus = 'Researching across all 5 platforms...';
                     try {
-                        // Use google,youtube for faster results (avoids Vercel timeout)
-                        const response = await fetch(`/api/brands/${this.selectedBrand.id}/refresh?platforms=google,youtube`, {
+                        // Research across ALL platforms - this is the core value of Total Search!
+                        const response = await fetch(`/api/brands/${this.selectedBrand.id}/refresh`, {
                             method: 'POST'
                         });
                         if (response.ok) {
                             const data = await response.json();
-                            this.refreshStatus = `Found data for ${data.keywords_researched || 0} keywords`;
+                            const platforms = data.platforms_checked?.length || 5;
+                            this.refreshStatus = `Found data for ${data.keywords_researched || 0} keywords across ${platforms} platforms`;
                             await this.loadBrandData(this.selectedBrand.id);
                         } else {
                             const error = await response.json();
@@ -660,7 +661,7 @@
                         alert('Failed to refresh: ' + error.message);
                     } finally {
                         this.isLoading = false;
-                        setTimeout(() => { this.refreshStatus = ''; }, 3000);
+                        setTimeout(() => { this.refreshStatus = ''; }, 5000);
                     }
                 },
 
