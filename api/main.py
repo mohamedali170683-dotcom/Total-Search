@@ -398,15 +398,26 @@ async def quick_research(
             results = await pipeline.run(keyword_list, options)
 
         # Save to database
-        repo.save_batch(results)
+        save_error = None
+        saved_ids = []
+        try:
+            saved_ids = repo.save_batch(results)
+            print(f"Saved {len(saved_ids)} keywords: {saved_ids}")
+        except Exception as save_e:
+            import traceback
+            save_error = f"Save failed: {save_e}\n{traceback.format_exc()}"
+            print(save_error)
 
         return {
             "count": len(results),
-            "keywords": [r.to_rag_document() for r in results]
+            "keywords": [r.to_rag_document() for r in results],
+            "saved_ids": saved_ids,
+            "save_error": save_error,
         }
 
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        import traceback
+        raise HTTPException(status_code=500, detail=f"{str(e)}\n{traceback.format_exc()}")
 
 
 @app.get("/api/research/{task_id}")
