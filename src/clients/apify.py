@@ -36,9 +36,9 @@ class ApifyClient:
     TIKTOK_ACTOR = "clockworks/tiktok-scraper"
     INSTAGRAM_ACTOR = "apify/instagram-hashtag-scraper"
 
-    # Timeouts
-    DEFAULT_TIMEOUT_SECS = 300  # 5 minutes
-    POLL_INTERVAL_SECS = 5
+    # Timeouts - reduced for Vercel serverless (60s max)
+    DEFAULT_TIMEOUT_SECS = 45  # 45 seconds to stay within Vercel limits
+    POLL_INTERVAL_SECS = 3
 
     def __init__(
         self,
@@ -62,11 +62,11 @@ class ApifyClient:
     async def run_tiktok_hashtag_scraper(
         self,
         hashtags: list[str],
-        results_per_hashtag: int = 50,
+        results_per_hashtag: int = 20,  # Reduced for faster results
         timeout_secs: int | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
-        Run TikTok hashtag scraper for multiple hashtags.
+        Run TikTok hashtag scraper for multiple hashtags in parallel.
 
         Args:
             hashtags: List of hashtags to scrape (without #)
@@ -79,15 +79,25 @@ class ApifyClient:
         timeout_secs = timeout_secs or self.DEFAULT_TIMEOUT_SECS
         results: dict[str, dict[str, Any]] = {}
 
-        for hashtag in hashtags:
+        # Run all hashtags in parallel for speed
+        async def fetch_hashtag(hashtag: str) -> tuple[str, dict]:
             try:
                 data = await self._run_single_tiktok_hashtag(
                     hashtag, results_per_hashtag, timeout_secs
                 )
-                results[hashtag] = data
+                return hashtag, data
             except Exception as e:
                 logger.error(f"Failed to scrape TikTok hashtag '{hashtag}': {e}")
-                results[hashtag] = {"error": str(e), "videos": []}
+                return hashtag, {"error": str(e), "videos": []}
+
+        tasks = [fetch_hashtag(h) for h in hashtags]
+        completed = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for item in completed:
+            if isinstance(item, tuple):
+                hashtag, data = item
+                results[hashtag] = data
+            # Exceptions are handled inside fetch_hashtag
 
         return results
 
@@ -186,11 +196,11 @@ class ApifyClient:
     async def run_instagram_hashtag_scraper(
         self,
         hashtags: list[str],
-        results_per_hashtag: int = 50,
+        results_per_hashtag: int = 20,  # Reduced for faster results
         timeout_secs: int | None = None,
     ) -> dict[str, dict[str, Any]]:
         """
-        Run Instagram hashtag scraper for multiple hashtags.
+        Run Instagram hashtag scraper for multiple hashtags in parallel.
 
         Args:
             hashtags: List of hashtags to scrape (without #)
@@ -203,15 +213,25 @@ class ApifyClient:
         timeout_secs = timeout_secs or self.DEFAULT_TIMEOUT_SECS
         results: dict[str, dict[str, Any]] = {}
 
-        for hashtag in hashtags:
+        # Run all hashtags in parallel for speed
+        async def fetch_hashtag(hashtag: str) -> tuple[str, dict]:
             try:
                 data = await self._run_single_instagram_hashtag(
                     hashtag, results_per_hashtag, timeout_secs
                 )
-                results[hashtag] = data
+                return hashtag, data
             except Exception as e:
                 logger.error(f"Failed to scrape Instagram hashtag '{hashtag}': {e}")
-                results[hashtag] = {"error": str(e), "posts": []}
+                return hashtag, {"error": str(e), "posts": []}
+
+        tasks = [fetch_hashtag(h) for h in hashtags]
+        completed = await asyncio.gather(*tasks, return_exceptions=True)
+
+        for item in completed:
+            if isinstance(item, tuple):
+                hashtag, data = item
+                results[hashtag] = data
+            # Exceptions are handled inside fetch_hashtag
 
         return results
 

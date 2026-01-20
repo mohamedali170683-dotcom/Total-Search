@@ -55,13 +55,13 @@ class PipelineOptions(BaseModel):
         description="Directory for checkpoint files",
     )
 
-    # Social media scraping options
+    # Social media scraping options - reduced for Vercel serverless speed
     tiktok_results_per_hashtag: int = Field(
-        default=50,
+        default=20,
         description="Number of TikTok videos to scrape per hashtag",
     )
     instagram_results_per_hashtag: int = Field(
-        default=50,
+        default=20,
         description="Number of Instagram posts to scrape per hashtag",
     )
 
