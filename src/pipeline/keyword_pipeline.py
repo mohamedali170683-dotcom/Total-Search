@@ -14,6 +14,7 @@ from src.calculators.unified_score import UnifiedScoreCalculator, WeightPresets
 from src.clients.apify import ApifyClient
 from src.clients.base import batch_items
 from src.clients.dataforseo import DataForSEOClient
+from src.clients.google_trends import GoogleTrendsClient
 from src.clients.junglescout import JungleScoutClient
 from src.config import Settings, get_settings
 from src.models.keyword import Platform, UnifiedKeywordData
@@ -102,6 +103,7 @@ class KeywordPipeline:
         dataforseo_client: DataForSEOClient | None = None,
         apify_client: ApifyClient | None = None,
         junglescout_client: JungleScoutClient | None = None,
+        google_trends_client: GoogleTrendsClient | None = None,
     ):
         self.settings = settings or get_settings()
 
@@ -109,6 +111,7 @@ class KeywordPipeline:
         self.dataforseo = dataforseo_client or DataForSEOClient(settings=self.settings)
         self.apify = apify_client or ApifyClient(settings=self.settings)
         self.junglescout = junglescout_client or JungleScoutClient(settings=self.settings)
+        self.google_trends = google_trends_client or GoogleTrendsClient(settings=self.settings)
 
         # Initialize calculators
         self.tiktok_calculator = TikTokProxyCalculator()
@@ -297,10 +300,10 @@ class KeywordPipeline:
         keywords: list[str],
         keyword_data: dict[str, UnifiedKeywordData],
     ) -> None:
-        """Fetch YouTube search volume data."""
+        """Fetch YouTube search volume data using Google Trends."""
         try:
-            logger.debug(f"Fetching YouTube data for {len(keywords)} keywords")
-            metrics = await self.dataforseo.get_youtube_search_volume(keywords)
+            logger.debug(f"Fetching YouTube data via Google Trends for {len(keywords)} keywords")
+            metrics = await self.google_trends.get_youtube_search_volume(keywords)
 
             for kw, metric in zip(keywords, metrics):
                 keyword_data[kw].youtube = metric
@@ -426,6 +429,7 @@ class KeywordPipeline:
             self.dataforseo.close(),
             self.apify.close(),
             self.junglescout.close(),
+            self.google_trends.close(),
             return_exceptions=True,
         )
 

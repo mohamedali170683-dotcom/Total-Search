@@ -3,6 +3,7 @@
 from src.clients.apify import ApifyClient
 from src.clients.base import BaseAPIClient, RateLimiter
 from src.clients.dataforseo import DataForSEOClient
+from src.clients.google_trends import GoogleTrendsClient
 from src.clients.junglescout import JungleScoutClient
 
 __all__ = [
@@ -11,4 +12,5 @@ __all__ = [
     "DataForSEOClient",
     "ApifyClient",
     "JungleScoutClient",
+    "GoogleTrendsClient",
 ]

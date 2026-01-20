@@ -17,22 +17,24 @@ class TikTokProxyCalculator:
     """
     Converts TikTok hashtag metrics into a search-volume-like score.
 
-    Formula components:
-    - hashtag_views: Total views (all-time) - normalized to monthly estimate
-    - video_count: Number of videos using hashtag
-    - avg_engagement: Average likes + comments + shares per video
-    - trend_velocity: Recent vs older posts engagement ratio
+    Formula focuses on DEMAND signals (views/post counts), NOT engagement:
+    - hashtag_views: Total views (all-time) - primary demand signal
+    - video_count: Number of videos using hashtag - content creation demand
 
-    The output is calibrated to be roughly comparable to Google search volume
-    (i.e., a score of 50,000 indicates similar "demand" as 50,000 Google searches)
+    The output represents estimated monthly searches/interest based on
+    hashtag view counts, calibrated to be comparable to Google search volume.
     """
 
-    # Calibration constants (tuned based on cross-platform analysis)
-    VIEWS_WEIGHT = 0.0001  # Views to demand conversion
-    VIDEO_COUNT_WEIGHT = 0.01  # Video count contribution
-    ENGAGEMENT_WEIGHT = 0.5  # Engagement multiplier
-    TREND_WEIGHT = 10000  # Base weight for trend adjustment
-    ESTIMATED_HASHTAG_AGE_MONTHS = 24  # Average assumption for normalization
+    # Calibration: Convert hashtag views to monthly search estimate
+    # TikTok hashtag views are cumulative, so we estimate monthly based on age
+    ESTIMATED_HASHTAG_AGE_MONTHS = 12  # Conservative estimate
+
+    # Conversion factor: 1M views ≈ 10K monthly searches (based on cross-platform analysis)
+    VIEWS_TO_SEARCHES_FACTOR = 0.01
+
+    # Video count bonus: More content = more demand
+    # 1000 videos ≈ 1000 additional monthly searches
+    VIDEO_COUNT_FACTOR = 1.0
 
     # Normalization bounds
     MIN_PROXY_SCORE = 0
@@ -46,7 +48,7 @@ class TikTokProxyCalculator:
             raw_data: Raw data from Apify TikTok scraper
 
         Returns:
-            TikTokMetrics with calculated proxy score
+            TikTokMetrics with calculated proxy score based on views/post counts
         """
         stats = raw_data.get("stats", {})
         videos = raw_data.get("videos", [])
@@ -57,18 +59,16 @@ class TikTokProxyCalculator:
         avg_comments = stats.get("avg_comments", 0)
         avg_shares = stats.get("avg_shares", 0)
 
-        # Calculate trend velocity from videos
-        trend_velocity = self.calculate_trend_velocity(videos)
+        # Calculate trend velocity from video posting frequency (NOT engagement)
+        trend_velocity = self._calculate_posting_trend(videos)
 
         # Determine trend direction
         trend = self._determine_trend(trend_velocity)
 
-        # Calculate proxy score
-        proxy_score = self._calculate_proxy_score(
+        # Calculate proxy score based on DEMAND (views + video count)
+        proxy_score = self._calculate_demand_proxy(
             hashtag_views=hashtag_views,
             video_count=video_count,
-            avg_engagement=avg_likes + avg_comments + avg_shares,
-            trend_velocity=trend_velocity,
         )
 
         return TikTokMetrics(
@@ -85,70 +85,97 @@ class TikTokProxyCalculator:
             raw_data=raw_data,
         )
 
-    def _calculate_proxy_score(
+    def _calculate_demand_proxy(
         self,
         hashtag_views: int,
         video_count: int,
-        avg_engagement: float,
-        trend_velocity: float,
     ) -> int:
-        """Calculate the proxy score from components."""
-        # Base score from views (normalized to monthly)
+        """
+        Calculate proxy score based on DEMAND metrics only.
+
+        This converts hashtag views and video counts into an estimated
+        monthly search volume equivalent.
+        """
+        # Primary signal: Hashtag views → monthly searches
+        # Estimate monthly views from total views
         monthly_views = hashtag_views / self.ESTIMATED_HASHTAG_AGE_MONTHS
-        views_component = monthly_views * self.VIEWS_WEIGHT
 
-        # Video count component (indicates content creation demand)
-        video_component = video_count * self.VIDEO_COUNT_WEIGHT
+        # Convert views to search equivalent
+        # Logic: 1M monthly views ≈ 10K monthly searches
+        views_as_searches = monthly_views * self.VIEWS_TO_SEARCHES_FACTOR
 
-        # Engagement multiplier (capped at 3x)
-        engagement_multiplier = min(3.0, 1 + (avg_engagement / 10000) * self.ENGAGEMENT_WEIGHT)
+        # Secondary signal: Video count indicates content creator demand
+        # More videos = more people searching/creating around this topic
+        video_count_signal = video_count * self.VIDEO_COUNT_FACTOR
 
-        # Base score
-        base_score = (views_component + video_component) * engagement_multiplier
-
-        # Apply trend adjustment
-        trend_adjusted = base_score * trend_velocity
+        # Combined demand score
+        demand_score = views_as_searches + video_count_signal
 
         # Apply bounds
-        final_score = max(self.MIN_PROXY_SCORE, min(self.MAX_PROXY_SCORE, trend_adjusted))
+        final_score = max(self.MIN_PROXY_SCORE, min(self.MAX_PROXY_SCORE, demand_score))
 
         return int(final_score)
 
-    def calculate_trend_velocity(self, videos: list[dict]) -> float:
+    def _calculate_posting_trend(self, videos: list[dict]) -> float:
         """
-        Calculate trend velocity by comparing recent vs older video engagement.
+        Calculate trend velocity by comparing posting FREQUENCY over time.
+
+        This measures demand by how many NEW videos are being created,
+        not engagement metrics.
 
         Returns:
-            Velocity multiplier (>1 = growing, <1 = declining)
+            Velocity multiplier (>1 = growing interest, <1 = declining)
         """
-        if len(videos) < 6:
+        if len(videos) < 4:
             return 1.0  # Not enough data, assume stable
 
-        # Sort by creation time (newest first)
-        sorted_videos = sorted(
-            videos,
-            key=lambda v: v.get("createTime", 0) or v.get("createTimeISO", ""),
-            reverse=True,
-        )
+        # Extract timestamps
+        timestamps = []
+        for video in videos:
+            ts = video.get("createTime", 0)
+            if not ts:
+                # Try ISO format
+                iso_ts = video.get("createTimeISO", "")
+                if iso_ts:
+                    try:
+                        from datetime import datetime
 
-        # Split into recent and older halves
-        mid = len(sorted_videos) // 2
-        recent = sorted_videos[:mid]
-        older = sorted_videos[mid:]
+                        dt = datetime.fromisoformat(iso_ts.replace("Z", "+00:00"))
+                        ts = int(dt.timestamp())
+                    except (ValueError, TypeError):
+                        continue
+            if ts:
+                timestamps.append(ts)
 
-        def get_engagement(video: dict) -> int:
-            likes = video.get("diggCount", 0) or video.get("stats", {}).get("diggCount", 0) or 0
-            comments = video.get("commentCount", 0) or video.get("stats", {}).get("commentCount", 0) or 0
-            shares = video.get("shareCount", 0) or video.get("stats", {}).get("shareCount", 0) or 0
-            return likes + comments + shares
+        if len(timestamps) < 4:
+            return 1.0
 
-        recent_engagement = sum(get_engagement(v) for v in recent) / len(recent) if recent else 0
-        older_engagement = sum(get_engagement(v) for v in older) / len(older) if older else 0
+        # Sort timestamps (oldest first)
+        timestamps.sort()
 
-        if older_engagement > 0:
-            velocity = recent_engagement / older_engagement
+        # Split into first half and second half time periods
+        mid = len(timestamps) // 2
+        first_half = timestamps[:mid]
+        second_half = timestamps[mid:]
+
+        # Calculate posting rate for each half
+        def posting_rate(ts_list: list[int]) -> float:
+            if len(ts_list) < 2:
+                return 0
+            time_span = ts_list[-1] - ts_list[0]
+            if time_span <= 0:
+                return len(ts_list)  # All same day
+            days = time_span / 86400
+            return len(ts_list) / max(days, 1)
+
+        first_rate = posting_rate(first_half)
+        second_rate = posting_rate(second_half)
+
+        # Calculate velocity (second half rate / first half rate)
+        if first_rate > 0:
+            velocity = second_rate / first_rate
         else:
-            velocity = 1.5 if recent_engagement > 0 else 1.0
+            velocity = 1.5 if second_rate > 0 else 1.0
 
         # Clamp velocity to reasonable bounds
         return max(0.3, min(3.0, velocity))
@@ -166,18 +193,22 @@ class InstagramProxyCalculator:
     """
     Converts Instagram hashtag metrics into a search-volume-like score.
 
-    Formula components:
-    - post_count: Total posts (all-time)
-    - daily_posts: Posts per day (strongest demand signal)
-    - avg_engagement: Average likes + comments per post
-    - saturation_factor: Penalty for oversaturated hashtags
+    Formula focuses on DEMAND signals (post counts), NOT engagement:
+    - post_count: Total posts using hashtag (all-time)
+    - daily_posts: Posts per day (primary demand signal)
+
+    The output represents estimated monthly searches/interest based on
+    hashtag post volume, calibrated to be comparable to Google search volume.
     """
 
-    # Calibration constants
-    DAILY_POSTS_WEIGHT = 1.5  # Daily posts is the primary signal
-    ENGAGEMENT_MULTIPLIER_CAP = 2.0  # Max engagement boost
-    SATURATION_THRESHOLD = 10_000_000  # Posts above this are oversaturated
-    SATURATION_PENALTY = 0.5  # Penalty for oversaturated hashtags
+    # Calibration: Convert daily posts to monthly search estimate
+    # Logic: 100 daily posts ≈ 10,000 monthly searches
+    # This reflects that each post represents multiple people interested in the topic
+    DAILY_POSTS_TO_SEARCHES = 100  # 1 daily post ≈ 100 monthly searches
+
+    # Post count signal: Total posts indicates historical demand
+    # 100K total posts ≈ 1K monthly searches baseline
+    POST_COUNT_FACTOR = 0.01
 
     # Normalization bounds
     MIN_PROXY_SCORE = 0
@@ -191,26 +222,25 @@ class InstagramProxyCalculator:
             raw_data: Raw data from Apify Instagram scraper
 
         Returns:
-            InstagramMetrics with calculated proxy score
+            InstagramMetrics with calculated proxy score based on post counts
         """
         stats = raw_data.get("stats", {})
         posts = raw_data.get("posts", [])
 
         post_count = stats.get("post_count", 0)
-        daily_posts = stats.get("daily_posts", 0) or self.calculate_daily_posts(posts)
+        daily_posts = stats.get("daily_posts", 0) or self._calculate_daily_posts(posts)
         avg_likes = stats.get("avg_likes", 0)
         avg_comments = stats.get("avg_comments", 0)
         related_hashtags = stats.get("related_hashtags", [])
 
-        # Calculate trend from posts
-        trend_velocity = self._calculate_trend_velocity(posts)
+        # Calculate trend from posting FREQUENCY (not engagement)
+        trend_velocity = self._calculate_posting_trend(posts)
         trend = self._determine_trend(trend_velocity)
 
-        # Calculate proxy score
-        proxy_score = self._calculate_proxy_score(
+        # Calculate proxy score based on DEMAND (post counts only)
+        proxy_score = self._calculate_demand_proxy(
             post_count=post_count,
             daily_posts=daily_posts,
-            avg_engagement=avg_likes + avg_comments,
         )
 
         return InstagramMetrics(
@@ -228,37 +258,32 @@ class InstagramProxyCalculator:
             raw_data=raw_data,
         )
 
-    def _calculate_proxy_score(
+    def _calculate_demand_proxy(
         self,
         post_count: int,
         daily_posts: int,
-        avg_engagement: float,
     ) -> int:
-        """Calculate the proxy score from components."""
-        # Daily posts is the primary signal (monthly estimate)
-        monthly_posts = daily_posts * 30
-        daily_component = monthly_posts * self.DAILY_POSTS_WEIGHT * 100
+        """
+        Calculate proxy score based on DEMAND metrics only.
 
-        # Engagement multiplier (capped)
-        engagement_multiplier = min(
-            self.ENGAGEMENT_MULTIPLIER_CAP,
-            1 + (avg_engagement / 5000),
-        )
+        This converts post counts into an estimated monthly search volume equivalent.
+        """
+        # Primary signal: Daily posts → monthly searches
+        # Logic: Active posting = active interest/demand
+        daily_posts_signal = daily_posts * self.DAILY_POSTS_TO_SEARCHES
 
-        # Base score
-        base_score = daily_component * engagement_multiplier
+        # Secondary signal: Total post count indicates historical demand
+        post_count_signal = post_count * self.POST_COUNT_FACTOR
 
-        # Apply saturation penalty for oversaturated hashtags
-        if post_count > self.SATURATION_THRESHOLD:
-            saturation_ratio = self.SATURATION_THRESHOLD / post_count
-            base_score *= max(self.SATURATION_PENALTY, saturation_ratio)
+        # Combined demand score
+        demand_score = daily_posts_signal + post_count_signal
 
         # Apply bounds
-        final_score = max(self.MIN_PROXY_SCORE, min(self.MAX_PROXY_SCORE, base_score))
+        final_score = max(self.MIN_PROXY_SCORE, min(self.MAX_PROXY_SCORE, demand_score))
 
         return int(final_score)
 
-    def calculate_daily_posts(self, posts: list[dict]) -> int:
+    def _calculate_daily_posts(self, posts: list[dict]) -> int:
         """
         Calculate average daily posts from timestamp data.
 
@@ -273,8 +298,19 @@ class InstagramProxyCalculator:
 
         timestamps = []
         for post in posts:
-            if ts := post.get("timestamp"):
-                timestamps.append(ts)
+            ts = post.get("timestamp")
+            if ts:
+                # Handle string timestamps
+                if isinstance(ts, str):
+                    try:
+                        from datetime import datetime
+
+                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        timestamps.append(int(dt.timestamp()))
+                    except (ValueError, TypeError):
+                        continue
+                elif isinstance(ts, (int, float)):
+                    timestamps.append(int(ts))
 
         if len(timestamps) < 2:
             return 0
@@ -292,33 +328,67 @@ class InstagramProxyCalculator:
 
         return int(len(timestamps) / span_days)
 
-    def _calculate_trend_velocity(self, posts: list[dict]) -> float:
-        """Calculate trend velocity from post engagement over time."""
-        if len(posts) < 6:
+    def _calculate_posting_trend(self, posts: list[dict]) -> float:
+        """
+        Calculate trend velocity by comparing posting FREQUENCY over time.
+
+        This measures demand by how many NEW posts are being created,
+        not engagement metrics.
+
+        Returns:
+            Velocity multiplier (>1 = growing interest, <1 = declining)
+        """
+        if len(posts) < 4:
             return 1.0
 
-        # Sort by timestamp (newest first)
-        sorted_posts = sorted(
-            posts,
-            key=lambda p: p.get("timestamp", 0),
-            reverse=True,
-        )
+        # Extract timestamps
+        timestamps = []
+        for post in posts:
+            ts = post.get("timestamp")
+            if ts:
+                # Handle string timestamps
+                if isinstance(ts, str):
+                    try:
+                        from datetime import datetime
 
-        mid = len(sorted_posts) // 2
-        recent = sorted_posts[:mid]
-        older = sorted_posts[mid:]
+                        dt = datetime.fromisoformat(ts.replace("Z", "+00:00"))
+                        timestamps.append(int(dt.timestamp()))
+                    except (ValueError, TypeError):
+                        continue
+                elif isinstance(ts, (int, float)):
+                    timestamps.append(int(ts))
 
-        def get_engagement(post: dict) -> int:
-            return (post.get("likesCount", 0) or 0) + (post.get("commentsCount", 0) or 0)
+        if len(timestamps) < 4:
+            return 1.0
 
-        recent_engagement = sum(get_engagement(p) for p in recent) / len(recent) if recent else 0
-        older_engagement = sum(get_engagement(p) for p in older) / len(older) if older else 0
+        # Sort timestamps (oldest first)
+        timestamps.sort()
 
-        if older_engagement > 0:
-            velocity = recent_engagement / older_engagement
+        # Split into first half and second half time periods
+        mid = len(timestamps) // 2
+        first_half = timestamps[:mid]
+        second_half = timestamps[mid:]
+
+        # Calculate posting rate for each half
+        def posting_rate(ts_list: list[int]) -> float:
+            if len(ts_list) < 2:
+                return 0
+            time_span = ts_list[-1] - ts_list[0]
+            if time_span <= 0:
+                return len(ts_list)  # All same day
+            days = time_span / 86400
+            return len(ts_list) / max(days, 1)
+
+        first_rate = posting_rate(first_half)
+        second_rate = posting_rate(second_half)
+
+        # Calculate velocity (second half rate / first half rate)
+        if first_rate > 0:
+            velocity = second_rate / first_rate
         else:
-            velocity = 1.5 if recent_engagement > 0 else 1.0
+            velocity = 1.5 if second_rate > 0 else 1.0
 
+        # Clamp velocity to reasonable bounds
         return max(0.3, min(3.0, velocity))
 
     def _determine_trend(self, velocity: float) -> TrendDirection:

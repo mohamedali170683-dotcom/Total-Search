@@ -137,7 +137,7 @@
                                 <div>
                                     <div class="text-2xl font-bold mb-2" x-text="formatVolume(getPlatformVolume(platform.id))"></div>
                                     <div class="text-xs text-gray-400">
-                                        <span x-text="getPlatformConfidence(platform.id) === 'proxy' ? 'engagement score' : 'searches/month'"></span>
+                                        <span x-text="getPlatformConfidence(platform.id) === 'proxy' ? 'est. demand/month' : 'searches/month'"></span>
                                     </div>
                                 </div>
                             </template>
@@ -700,10 +700,10 @@
 
                 getPlatformNoDataReason(platformId) {
                     const reasons = {
-                        'youtube': 'API data unavailable',
-                        'amazon': 'API key required',
-                        'tiktok': 'Scraper timeout',
-                        'instagram': 'Scraper timeout',
+                        'youtube': 'Click refresh to load',
+                        'amazon': 'Jungle Scout API key required',
+                        'tiktok': 'Click refresh to load',
+                        'instagram': 'Click refresh to load',
                         'google': 'Click refresh to load'
                     };
                     return reasons[platformId] || 'No data yet';
