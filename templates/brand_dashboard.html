@@ -99,11 +99,12 @@
                             </button>
                         </div>
                     </div>
-                    <div class="flex items-center space-x-2">
+                    <div class="flex flex-col items-end space-y-2">
                         <button @click="refreshBrandData()" :disabled="isLoading" class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-4 py-2 rounded-lg text-sm transition flex items-center space-x-2">
                             <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
-                            <span>Refresh Data</span>
+                            <span x-text="isLoading ? 'Researching...' : 'Refresh Data'"></span>
                         </button>
+                        <span x-show="refreshStatus" x-text="refreshStatus" class="text-xs text-gray-400"></span>
                     </div>
                 </div>
             </div>
@@ -638,19 +639,32 @@
                 async refreshBrandData() {
                     if (!this.selectedBrand) return;
                     this.isLoading = true;
+                    this.refreshStatus = 'Researching keywords...';
                     try {
-                        const response = await fetch(`/api/brands/${this.selectedBrand.id}/refresh`, {
+                        // Use google,youtube for faster results (avoids Vercel timeout)
+                        const response = await fetch(`/api/brands/${this.selectedBrand.id}/refresh?platforms=google,youtube`, {
                             method: 'POST'
                         });
                         if (response.ok) {
+                            const data = await response.json();
+                            this.refreshStatus = `Found data for ${data.keywords_researched || 0} keywords`;
                             await this.loadBrandData(this.selectedBrand.id);
+                        } else {
+                            const error = await response.json();
+                            this.refreshStatus = 'Research failed';
+                            alert('Refresh failed: ' + (error.detail || 'Unknown error'));
                         }
                     } catch (error) {
                         console.error('Failed to refresh:', error);
+                        this.refreshStatus = 'Connection error';
+                        alert('Failed to refresh: ' + error.message);
                     } finally {
                         this.isLoading = false;
+                        setTimeout(() => { this.refreshStatus = ''; }, 3000);
                     }
                 },
+
+                refreshStatus: '',
 
                 // Helper methods
                 getPlatformVolume(platformId) {

@@ -838,7 +838,10 @@ async def add_competitor(brand_id: int, request: AddCompetitorRequest):
 
 
 @app.post("/api/brands/{brand_id}/refresh")
-async def refresh_brand_data(brand_id: int):
+async def refresh_brand_data(
+    brand_id: int,
+    platforms: str = Query(default="google,youtube", description="Platforms to research (comma-separated)")
+):
     """Refresh data for a brand by re-researching all variants (synchronous for Vercel)."""
     if repo is None:
         raise HTTPException(status_code=500, detail="Repository not initialized")
@@ -863,20 +866,32 @@ async def refresh_brand_data(brand_id: int):
             for comp in competitors:
                 all_keywords.extend(comp.get_keywords())
 
-            # Remove duplicates
-            all_keywords = list(set(all_keywords))
+            # Remove duplicates and limit to prevent timeout
+            all_keywords = list(set(all_keywords))[:5]  # Max 5 keywords to avoid timeout
 
         if not all_keywords:
             return {"success": True, "keywords_researched": 0, "message": "No keywords to research"}
 
+        # Parse platforms (default to Google+YouTube for speed)
+        platform_list = []
+        for p in platforms.split(","):
+            p = p.strip().lower()
+            if p:
+                try:
+                    platform_list.append(Platform(p))
+                except ValueError:
+                    pass
+
+        if not platform_list:
+            platform_list = [Platform.GOOGLE, Platform.YOUTUBE]
+
         # Run synchronously (Vercel serverless doesn't support background tasks well)
         settings = get_settings()
-        platforms = [Platform.GOOGLE, Platform.YOUTUBE, Platform.AMAZON, Platform.TIKTOK, Platform.INSTAGRAM]
 
         options = PipelineOptions(
-            platforms=platforms,
+            platforms=platform_list,
             weight_preset="balanced",
-            batch_size=10,
+            batch_size=5,
             save_checkpoints=False,
         )
 
@@ -898,6 +913,7 @@ async def refresh_brand_data(brand_id: int):
             return {
                 "success": True,
                 "keywords_researched": len(results) if results else 0,
+                "platforms_checked": [p.value for p in platform_list],
                 "results": [
                     {
                         "keyword": r.keyword,
