@@ -838,8 +838,8 @@ async def add_competitor(brand_id: int, request: AddCompetitorRequest):
 
 
 @app.post("/api/brands/{brand_id}/refresh")
-async def refresh_brand_data(brand_id: int, background_tasks: BackgroundTasks):
-    """Refresh data for a brand by re-researching all variants."""
+async def refresh_brand_data(brand_id: int):
+    """Refresh data for a brand by re-researching all variants (synchronous for Vercel)."""
     if repo is None:
         raise HTTPException(status_code=500, detail="Repository not initialized")
 
@@ -866,15 +866,51 @@ async def refresh_brand_data(brand_id: int, background_tasks: BackgroundTasks):
             # Remove duplicates
             all_keywords = list(set(all_keywords))
 
-        # Start background research task
-        if all_keywords:
-            background_tasks.add_task(
-                run_brand_refresh_task,
-                brand_id,
-                all_keywords,
-            )
+        if not all_keywords:
+            return {"success": True, "keywords_researched": 0, "message": "No keywords to research"}
 
-        return {"success": True, "keywords_queued": len(all_keywords)}
+        # Run synchronously (Vercel serverless doesn't support background tasks well)
+        settings = get_settings()
+        platforms = [Platform.GOOGLE, Platform.YOUTUBE, Platform.AMAZON, Platform.TIKTOK, Platform.INSTAGRAM]
+
+        options = PipelineOptions(
+            platforms=platforms,
+            weight_preset="balanced",
+            batch_size=10,
+            save_checkpoints=False,
+        )
+
+        try:
+            async with KeywordPipeline(settings=settings) as pipeline:
+                results = await pipeline.run(all_keywords, options)
+
+            # Save results
+            if results:
+                repo.save_batch(results)
+
+            # Update brand last_refreshed timestamp
+            with repo.get_session() as session:
+                brand = session.get(Brand, brand_id)
+                if brand:
+                    brand.last_refreshed = datetime.utcnow()
+                    session.commit()
+
+            return {
+                "success": True,
+                "keywords_researched": len(results) if results else 0,
+                "results": [
+                    {
+                        "keyword": r.keyword,
+                        "unified_demand_score": r.unified_demand_score,
+                        "best_platform": r.best_platform.value if r.best_platform else None,
+                    }
+                    for r in (results or [])
+                ]
+            }
+
+        except Exception as e:
+            import traceback
+            raise HTTPException(status_code=500, detail=f"Research failed: {str(e)}\n{traceback.format_exc()}")
 
     except HTTPException:
         raise
@@ -882,7 +918,7 @@ async def refresh_brand_data(brand_id: int, background_tasks: BackgroundTasks):
         raise HTTPException(status_code=500, detail=str(e))
 
 
-async def run_brand_refresh_task(brand_id: int, keywords: list[str]):
+async def run_brand_refresh_task_unused(brand_id: int, keywords: list[str]):
     """Background task to refresh brand keyword data."""
     try:
         from src.db.models import Brand
