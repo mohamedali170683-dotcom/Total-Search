@@ -708,7 +708,14 @@ async def get_brand_metrics(brand_id: int):
                         metric = session.execute(metric_stmt).scalar_one_or_none()
 
                         if metric:
-                            has_data = True
+                            # Only mark as "has data" if we have real search volume (not just proxy)
+                            if metric.search_volume and metric.search_volume > 0:
+                                has_data = True
+                            elif metric.proxy_score and metric.proxy_score > 0:
+                                # For social platforms (TikTok, Instagram), proxy score is valid data
+                                if platform in ['tiktok', 'instagram']:
+                                    has_data = True
+
                             volume = metric.search_volume or metric.proxy_score or 0
                             total_volume += volume
                             if metric.trend_velocity:
