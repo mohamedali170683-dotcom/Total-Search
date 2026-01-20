@@ -485,5 +485,470 @@ async def export_data(
     return {"data": data, "count": len(data)}
 
 
+# =============================================================================
+# Brand Intelligence API Endpoints
+# =============================================================================
+
+@app.get("/brand")
+async def brand_dashboard_page(request: Request):
+    """Render the brand intelligence dashboard."""
+    return templates.TemplateResponse(
+        "brand_dashboard.html",
+        {"request": request}
+    )
+
+
+@app.get("/api/brands")
+async def list_brands():
+    """List all tracked brands."""
+    if repo is None:
+        return {"brands": [], "error": "Repository not initialized"}
+
+    try:
+        from src.db.models import Brand
+        with repo.get_session() as session:
+            from sqlalchemy import select
+            stmt = select(Brand).order_by(Brand.updated_at.desc())
+            brands = session.execute(stmt).scalars().all()
+
+            return {
+                "brands": [
+                    {
+                        "id": b.id,
+                        "name": b.name,
+                        "variants": b.get_variants(),
+                        "created_at": b.created_at.isoformat(),
+                        "last_refreshed": b.last_refreshed.isoformat() if b.last_refreshed else None,
+                    }
+                    for b in brands
+                ]
+            }
+    except Exception as e:
+        return {"brands": [], "error": str(e)}
+
+
+class CreateBrandRequest(BaseModel):
+    """Request model for creating a brand."""
+    name: str = Field(..., min_length=1, max_length=200)
+    variants: list[str] = Field(default=[])
+
+
+@app.post("/api/brands")
+async def create_brand(request: CreateBrandRequest):
+    """Create a new brand to track."""
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    try:
+        from src.db.models import Brand
+        import json
+
+        with repo.get_session() as session:
+            brand = Brand(
+                name=request.name,
+                variants=json.dumps(request.variants) if request.variants else None,
+            )
+            session.add(brand)
+            session.commit()
+            session.refresh(brand)
+
+            return {
+                "brand": {
+                    "id": brand.id,
+                    "name": brand.name,
+                    "variants": brand.get_variants(),
+                    "created_at": brand.created_at.isoformat(),
+                }
+            }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/api/brands/{brand_id}/metrics")
+async def get_brand_metrics(brand_id: int):
+    """Get aggregated metrics for a brand across all platforms."""
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    try:
+        from src.db.models import Brand, Keyword, KeywordMetric, BrandAlert, Competitor
+        from sqlalchemy import select, func
+        import json
+
+        with repo.get_session() as session:
+            # Get the brand
+            brand = session.get(Brand, brand_id)
+            if not brand:
+                raise HTTPException(status_code=404, detail="Brand not found")
+
+            variants = brand.get_variants()
+
+            # Aggregate metrics across all variants and platforms
+            platform_metrics = {}
+            platforms = ['google', 'youtube', 'amazon', 'tiktok', 'instagram']
+
+            for platform in platforms:
+                total_volume = 0
+                avg_trend = 0
+                count = 0
+
+                for variant in variants:
+                    # Find keyword matching variant
+                    stmt = select(Keyword).where(Keyword.keyword == variant)
+                    kw = session.execute(stmt).scalar_one_or_none()
+
+                    if kw:
+                        # Get latest metrics for this platform
+                        metric_stmt = (
+                            select(KeywordMetric)
+                            .where(KeywordMetric.keyword_id == kw.id)
+                            .where(KeywordMetric.platform == platform)
+                            .order_by(KeywordMetric.collected_at.desc())
+                            .limit(1)
+                        )
+                        metric = session.execute(metric_stmt).scalar_one_or_none()
+
+                        if metric:
+                            volume = metric.search_volume or metric.proxy_score or 0
+                            total_volume += volume
+                            if metric.trend_velocity:
+                                avg_trend += metric.trend_velocity
+                                count += 1
+
+                platform_metrics[platform] = {
+                    "volume": total_volume,
+                    "trend": round(avg_trend / count * 100, 1) if count > 0 else 0,
+                }
+
+            # Get active alerts
+            alerts_stmt = (
+                select(BrandAlert)
+                .where(BrandAlert.brand_id == brand_id)
+                .where(BrandAlert.dismissed == 0)
+                .order_by(BrandAlert.created_at.desc())
+                .limit(10)
+            )
+            alerts = session.execute(alerts_stmt).scalars().all()
+
+            # Get competitors
+            competitors_stmt = select(Competitor).where(Competitor.brand_id == brand_id)
+            competitors = session.execute(competitors_stmt).scalars().all()
+
+            competitor_data = []
+            for comp in competitors:
+                comp_metrics = {}
+                comp_keywords = comp.get_keywords()
+
+                for platform in platforms:
+                    total_vol = 0
+                    for kw_text in comp_keywords:
+                        kw = session.execute(
+                            select(Keyword).where(Keyword.keyword == kw_text)
+                        ).scalar_one_or_none()
+
+                        if kw:
+                            metric = session.execute(
+                                select(KeywordMetric)
+                                .where(KeywordMetric.keyword_id == kw.id)
+                                .where(KeywordMetric.platform == platform)
+                                .order_by(KeywordMetric.collected_at.desc())
+                                .limit(1)
+                            ).scalar_one_or_none()
+
+                            if metric:
+                                total_vol += metric.search_volume or metric.proxy_score or 0
+
+                    comp_metrics[platform] = {"volume": total_vol}
+
+                competitor_data.append({
+                    "id": comp.id,
+                    "name": comp.name,
+                    "metrics": comp_metrics,
+                })
+
+            # Generate content opportunities based on related keyword patterns
+            opportunities = generate_content_opportunities(brand.name, variants, platform_metrics)
+
+            # Calculate weekly change (mock for now, would need historical data)
+            total_volume = sum(m["volume"] for m in platform_metrics.values())
+            weekly_change = calculate_weekly_change(session, brand_id, variants)
+
+            return {
+                "metrics": platform_metrics,
+                "weeklyChange": weekly_change,
+                "alerts": [
+                    {
+                        "id": a.id,
+                        "type": a.alert_type,
+                        "title": a.title,
+                        "description": a.description,
+                        "platform": a.platform,
+                        "actions": a.actions,
+                    }
+                    for a in alerts
+                ],
+                "competitors": competitor_data,
+                "opportunities": opportunities,
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"{str(e)}\n{traceback.format_exc()}")
+
+
+def generate_content_opportunities(brand_name: str, variants: list[str], metrics: dict) -> list[dict]:
+    """Generate content opportunity suggestions based on brand data."""
+    opportunities = []
+
+    # Find best performing platform
+    best_platform = max(metrics.keys(), key=lambda p: metrics[p]["volume"]) if metrics else "google"
+
+    # Generate keyword-based opportunities
+    base_opportunities = [
+        {"suffix": "review", "platform": "youtube", "difficulty": "medium"},
+        {"suffix": "vs", "platform": "google", "difficulty": "medium"},
+        {"suffix": "tutorial", "platform": "youtube", "difficulty": "easy"},
+        {"suffix": "alternatives", "platform": "google", "difficulty": "hard"},
+        {"suffix": "how to use", "platform": "tiktok", "difficulty": "easy"},
+    ]
+
+    for opp in base_opportunities[:4]:
+        keyword = f"{brand_name} {opp['suffix']}"
+        opportunities.append({
+            "keyword": keyword,
+            "platform": opp["platform"],
+            "volume": int(metrics.get(opp["platform"], {}).get("volume", 0) * 0.1),  # Estimate
+            "difficulty": opp["difficulty"],
+            "reason": f"High search intent for {opp['suffix']} content on {opp['platform'].title()}",
+        })
+
+    return opportunities
+
+
+def calculate_weekly_change(session, brand_id: int, variants: list[str]) -> float:
+    """Calculate week-over-week change in search volume."""
+    # This would need historical data to calculate properly
+    # For now, return a mock value based on trend velocities
+    from src.db.models import Keyword, KeywordMetric
+    from sqlalchemy import select
+
+    total_trend = 0
+    count = 0
+
+    for variant in variants:
+        kw = session.execute(
+            select(Keyword).where(Keyword.keyword == variant)
+        ).scalar_one_or_none()
+
+        if kw:
+            metrics = session.execute(
+                select(KeywordMetric)
+                .where(KeywordMetric.keyword_id == kw.id)
+                .order_by(KeywordMetric.collected_at.desc())
+                .limit(5)
+            ).scalars().all()
+
+            for m in metrics:
+                if m.trend_velocity:
+                    total_trend += m.trend_velocity
+                    count += 1
+
+    return round(total_trend / count * 100, 1) if count > 0 else 0
+
+
+class AddVariantsRequest(BaseModel):
+    """Request model for adding keyword variants."""
+    variants: list[str] = Field(..., min_length=1)
+
+
+@app.post("/api/brands/{brand_id}/variants")
+async def add_brand_variants(brand_id: int, request: AddVariantsRequest):
+    """Add keyword variants to a brand."""
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    try:
+        from src.db.models import Brand
+        import json
+
+        with repo.get_session() as session:
+            brand = session.get(Brand, brand_id)
+            if not brand:
+                raise HTTPException(status_code=404, detail="Brand not found")
+
+            current_variants = brand.get_variants()
+            new_variants = [v for v in request.variants if v not in current_variants]
+            current_variants.extend(new_variants)
+            brand.set_variants(current_variants)
+
+            session.commit()
+
+            return {"success": True, "added": new_variants, "total": len(current_variants)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class AddCompetitorRequest(BaseModel):
+    """Request model for adding a competitor."""
+    name: str = Field(..., min_length=1, max_length=200)
+    keywords: list[str] = Field(default=[])
+
+
+@app.post("/api/brands/{brand_id}/competitors")
+async def add_competitor(brand_id: int, request: AddCompetitorRequest):
+    """Add a competitor to track."""
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    try:
+        from src.db.models import Brand, Competitor
+        import json
+
+        with repo.get_session() as session:
+            brand = session.get(Brand, brand_id)
+            if not brand:
+                raise HTTPException(status_code=404, detail="Brand not found")
+
+            competitor = Competitor(
+                brand_id=brand_id,
+                name=request.name,
+                keywords=json.dumps(request.keywords) if request.keywords else None,
+            )
+            session.add(competitor)
+            session.commit()
+            session.refresh(competitor)
+
+            return {
+                "competitor": {
+                    "id": competitor.id,
+                    "name": competitor.name,
+                    "keywords": competitor.get_keywords(),
+                }
+            }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.post("/api/brands/{brand_id}/refresh")
+async def refresh_brand_data(brand_id: int, background_tasks: BackgroundTasks):
+    """Refresh data for a brand by re-researching all variants."""
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    try:
+        from src.db.models import Brand, Competitor
+        from sqlalchemy import select
+
+        with repo.get_session() as session:
+            brand = session.get(Brand, brand_id)
+            if not brand:
+                raise HTTPException(status_code=404, detail="Brand not found")
+
+            variants = brand.get_variants()
+
+            # Also get competitor keywords
+            competitors = session.execute(
+                select(Competitor).where(Competitor.brand_id == brand_id)
+            ).scalars().all()
+
+            all_keywords = list(variants)
+            for comp in competitors:
+                all_keywords.extend(comp.get_keywords())
+
+            # Remove duplicates
+            all_keywords = list(set(all_keywords))
+
+        # Start background research task
+        if all_keywords:
+            background_tasks.add_task(
+                run_brand_refresh_task,
+                brand_id,
+                all_keywords,
+            )
+
+        return {"success": True, "keywords_queued": len(all_keywords)}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+async def run_brand_refresh_task(brand_id: int, keywords: list[str]):
+    """Background task to refresh brand keyword data."""
+    try:
+        from src.db.models import Brand
+
+        settings = get_settings()
+        platforms = [Platform.GOOGLE, Platform.YOUTUBE, Platform.AMAZON, Platform.TIKTOK, Platform.INSTAGRAM]
+
+        options = PipelineOptions(
+            platforms=platforms,
+            weight_preset="balanced",
+            batch_size=20,
+            save_checkpoints=False,
+        )
+
+        async with KeywordPipeline(settings=settings) as pipeline:
+            results = await pipeline.run(keywords, options)
+
+        # Save results
+        repo.save_batch(results)
+
+        # Update brand last_refreshed timestamp
+        with repo.get_session() as session:
+            brand = session.get(Brand, brand_id)
+            if brand:
+                brand.last_refreshed = datetime.utcnow()
+                session.commit()
+
+        # Generate alerts based on results
+        await generate_brand_alerts(brand_id, results)
+
+    except Exception as e:
+        print(f"Brand refresh error: {e}")
+
+
+async def generate_brand_alerts(brand_id: int, results: list):
+    """Generate alerts based on research results."""
+    try:
+        from src.db.models import BrandAlert
+        import json
+
+        with repo.get_session() as session:
+            for result in results:
+                # Check for significant trend changes
+                if result.cross_platform_trend and result.cross_platform_trend.value == "growing":
+                    # Find the platform with highest growth
+                    if result.platform_scores:
+                        for ps in result.platform_scores:
+                            if ps.weighted_score > 50:
+                                alert = BrandAlert(
+                                    brand_id=brand_id,
+                                    alert_type="opportunity",
+                                    title=f"'{result.keyword}' trending on {ps.platform.value.title()}",
+                                    description=f"Search volume is growing. Consider creating content.",
+                                    platform=ps.platform.value,
+                                    actions=json.dumps([
+                                        {"label": "Create Content", "type": "create_content"},
+                                        {"label": "Dismiss", "type": "dismiss"},
+                                    ]),
+                                )
+                                session.add(alert)
+
+            session.commit()
+
+    except Exception as e:
+        print(f"Alert generation error: {e}")
+
+
 # Vercel serverless handler
 app_handler = app

@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Brand Intelligence - Total Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+        .gradient-border {
+            background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+            padding: 2px;
+            border-radius: 0.75rem;
+        }
+        .gradient-border-inner {
+            background: #1f2937;
+            border-radius: 0.65rem;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen" x-data="brandDashboard()">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-building text-2xl text-purple-500"></i>
+                    <div>
+                        <h1 class="text-xl font-bold">Brand Intelligence</h1>
+                        <p class="text-xs text-gray-400">Track your brand across all platforms</p>
+                    </div>
+                </div>
+                <div class="flex items-center space-x-4">
+                    <a href="/home" class="text-sm text-gray-400 hover:text-white transition">
+                        <i class="fas fa-search mr-1"></i> Keyword Research
+                    </a>
+                    <button @click="showAddBrand = true" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2">
+                        <i class="fas fa-plus"></i>
+                        <span>Add Brand</span>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Brand Selector -->
+        <div class="mb-8" x-show="brands.length > 0">
+            <div class="flex items-center space-x-4 overflow-x-auto pb-2">
+                <template x-for="brand in brands" :key="brand.id">
+                    <button
+                        @click="selectBrand(brand)"
+                        :class="selectedBrand?.id === brand.id ? 'bg-purple-600 border-purple-500' : 'bg-gray-800 border-gray-700 hover:border-gray-600'"
+                        class="px-4 py-2 rounded-lg border text-sm font-medium transition whitespace-nowrap flex items-center space-x-2"
+                    >
+                        <span x-text="brand.name"></span>
+                        <span class="text-xs opacity-60" x-text="'(' + brand.variants.length + ' variants)'"></span>
+                    </button>
+                </template>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="brands.length === 0" class="text-center py-20">
+            <div class="gradient-border inline-block mb-6">
+                <div class="gradient-border-inner p-8">
+                    <i class="fas fa-building text-6xl text-purple-500 mb-4"></i>
+                </div>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">Start Tracking Your Brand</h2>
+            <p class="text-gray-400 mb-6 max-w-md mx-auto">
+                Add your brand to see how people are searching for you across Google, YouTube, Amazon, TikTok, and Instagram.
+            </p>
+            <button @click="showAddBrand = true" class="bg-purple-600 hover:bg-purple-700 px-6 py-3 rounded-lg font-semibold transition">
+                <i class="fas fa-plus mr-2"></i>
+                Add Your First Brand
+            </button>
+        </div>
+
+        <!-- Brand Dashboard Content -->
+        <div x-show="selectedBrand && brands.length > 0" x-cloak>
+            <!-- Brand Header -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6">
+                <div class="flex items-start justify-between">
+                    <div>
+                        <h2 class="text-2xl font-bold" x-text="selectedBrand?.name"></h2>
+                        <p class="text-gray-400 text-sm mt-1">
+                            Tracking <span x-text="selectedBrand?.variants?.length || 0" class="text-purple-400 font-medium"></span> keyword variants
+                        </p>
+                        <div class="flex flex-wrap gap-2 mt-3">
+                            <template x-for="variant in selectedBrand?.variants || []" :key="variant">
+                                <span class="px-2 py-1 bg-gray-700 rounded text-xs" x-text="variant"></span>
+                            </template>
+                            <button @click="showAddVariant = true" class="px-2 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition">
+                                <i class="fas fa-plus"></i> Add
+                            </button>
+                        </div>
+                    </div>
+                    <div class="flex items-center space-x-2">
+                        <button @click="refreshBrandData()" :disabled="isLoading" class="bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 px-4 py-2 rounded-lg text-sm transition flex items-center space-x-2">
+                            <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-sync-alt'"></i>
+                            <span>Refresh Data</span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Platform Performance Cards -->
+            <div class="mb-6">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fas fa-chart-bar mr-2 text-blue-500"></i>
+                    Where People Are Searching For You
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-5 gap-4">
+                    <template x-for="platform in platforms" :key="platform.id">
+                        <div class="bg-gray-800 rounded-xl p-4 border border-gray-700 hover:border-gray-600 transition">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i :class="platform.icon + ' text-xl ' + platform.color"></i>
+                                    <span class="font-medium" x-text="platform.name"></span>
+                                </div>
+                                <span
+                                    x-show="getPlatformTrend(platform.id) !== 0"
+                                    :class="getPlatformTrend(platform.id) > 0 ? 'text-green-500' : 'text-red-500'"
+                                    class="text-xs font-medium flex items-center"
+                                >
+                                    <i :class="getPlatformTrend(platform.id) > 0 ? 'fas fa-arrow-up' : 'fas fa-arrow-down'" class="mr-1"></i>
+                                    <span x-text="Math.abs(getPlatformTrend(platform.id)) + '%'"></span>
+                                </span>
+                            </div>
+                            <div class="text-2xl font-bold mb-2" x-text="formatVolume(getPlatformVolume(platform.id))"></div>
+                            <div class="text-xs text-gray-400">searches/month</div>
+                            <!-- Volume Bar -->
+                            <div class="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
+                                <div
+                                    class="h-full rounded-full transition-all duration-500"
+                                    :class="platform.barColor"
+                                    :style="'width: ' + getPlatformPercentage(platform.id) + '%'"
+                                ></div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Insights & Alerts -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                <!-- Alerts Panel -->
+                <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-bell mr-2 text-yellow-500"></i>
+                        Alerts & Opportunities
+                    </h3>
+                    <div class="space-y-3">
+                        <template x-for="alert in alerts" :key="alert.id">
+                            <div
+                                :class="{
+                                    'border-green-500/30 bg-green-500/5': alert.type === 'opportunity',
+                                    'border-yellow-500/30 bg-yellow-500/5': alert.type === 'warning',
+                                    'border-blue-500/30 bg-blue-500/5': alert.type === 'info'
+                                }"
+                                class="p-4 rounded-lg border"
+                            >
+                                <div class="flex items-start space-x-3">
+                                    <i :class="{
+                                        'fas fa-rocket text-green-500': alert.type === 'opportunity',
+                                        'fas fa-exclamation-triangle text-yellow-500': alert.type === 'warning',
+                                        'fas fa-info-circle text-blue-500': alert.type === 'info'
+                                    }" class="mt-1"></i>
+                                    <div class="flex-1">
+                                        <p class="font-medium" x-text="alert.title"></p>
+                                        <p class="text-sm text-gray-400 mt-1" x-text="alert.description"></p>
+                                        <div class="flex space-x-2 mt-3" x-show="alert.actions">
+                                            <template x-for="action in alert.actions || []" :key="action.label">
+                                                <button
+                                                    @click="handleAlertAction(alert, action)"
+                                                    class="px-3 py-1 bg-gray-700 hover:bg-gray-600 rounded text-xs transition"
+                                                    x-text="action.label"
+                                                ></button>
+                                            </template>
+                                        </div>
+                                    </div>
+                                    <button @click="dismissAlert(alert.id)" class="text-gray-500 hover:text-gray-300">
+                                        <i class="fas fa-times"></i>
+                                    </button>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="alerts.length === 0" class="text-center py-8 text-gray-500">
+                            <i class="fas fa-check-circle text-2xl mb-2"></i>
+                            <p>No alerts right now. Your brand is performing steadily!</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Quick Insights -->
+                <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-semibold mb-4 flex items-center">
+                        <i class="fas fa-lightbulb mr-2 text-purple-500"></i>
+                        Quick Insights
+                    </h3>
+                    <div class="space-y-4">
+                        <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                            <span class="text-gray-400">Best Performing Platform</span>
+                            <span class="font-medium flex items-center" x-show="bestPlatform">
+                                <i :class="getPlatformIcon(bestPlatform) + ' mr-2'"></i>
+                                <span x-text="bestPlatform"></span>
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                            <span class="text-gray-400">Total Monthly Searches</span>
+                            <span class="font-medium" x-text="formatVolume(totalVolume)"></span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                            <span class="text-gray-400">Fastest Growing Platform</span>
+                            <span class="font-medium text-green-500 flex items-center" x-show="fastestGrowing">
+                                <i class="fas fa-arrow-up mr-1"></i>
+                                <span x-text="fastestGrowing"></span>
+                            </span>
+                        </div>
+                        <div class="flex items-center justify-between p-3 bg-gray-700/50 rounded-lg">
+                            <span class="text-gray-400">Week-over-Week Change</span>
+                            <span
+                                :class="weeklyChange >= 0 ? 'text-green-500' : 'text-red-500'"
+                                class="font-medium"
+                                x-text="(weeklyChange >= 0 ? '+' : '') + weeklyChange + '%'"
+                            ></span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Competitor Comparison -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-6" x-show="competitors.length > 0">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold flex items-center">
+                        <i class="fas fa-users mr-2 text-red-500"></i>
+                        You vs Competitors
+                    </h3>
+                    <button @click="showAddCompetitor = true" class="text-sm text-gray-400 hover:text-white transition">
+                        <i class="fas fa-plus mr-1"></i> Add Competitor
+                    </button>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full">
+                        <thead>
+                            <tr class="text-left text-gray-400 text-sm border-b border-gray-700">
+                                <th class="pb-3">Brand</th>
+                                <template x-for="platform in platforms" :key="platform.id">
+                                    <th class="pb-3 text-center">
+                                        <i :class="platform.icon + ' ' + platform.color"></i>
+                                    </th>
+                                </template>
+                                <th class="pb-3 text-right">Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <!-- Your brand row -->
+                            <tr class="border-b border-gray-700 bg-purple-500/10">
+                                <td class="py-3 font-medium">
+                                    <span x-text="selectedBrand?.name"></span>
+                                    <span class="text-xs text-purple-400 ml-2">(You)</span>
+                                </td>
+                                <template x-for="platform in platforms" :key="platform.id">
+                                    <td class="py-3 text-center" x-text="formatVolume(getPlatformVolume(platform.id))"></td>
+                                </template>
+                                <td class="py-3 text-right font-medium" x-text="formatVolume(totalVolume)"></td>
+                            </tr>
+                            <!-- Competitor rows -->
+                            <template x-for="competitor in competitors" :key="competitor.id">
+                                <tr class="border-b border-gray-700 hover:bg-gray-700/30">
+                                    <td class="py-3" x-text="competitor.name"></td>
+                                    <template x-for="platform in platforms" :key="platform.id">
+                                        <td class="py-3 text-center">
+                                            <span
+                                                :class="getCompetitorVolume(competitor, platform.id) > getPlatformVolume(platform.id) ? 'text-red-400' : 'text-green-400'"
+                                                x-text="formatVolume(getCompetitorVolume(competitor, platform.id))"
+                                            ></span>
+                                        </td>
+                                    </template>
+                                    <td class="py-3 text-right" x-text="formatVolume(getCompetitorTotal(competitor))"></td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Add Competitor CTA -->
+            <div x-show="competitors.length === 0" class="bg-gray-800 rounded-xl p-6 border border-gray-700 border-dashed mb-6 text-center">
+                <i class="fas fa-users text-3xl text-gray-600 mb-3"></i>
+                <h4 class="font-medium mb-2">Track Your Competitors</h4>
+                <p class="text-gray-400 text-sm mb-4">See how your brand compares to the competition across all platforms.</p>
+                <button @click="showAddCompetitor = true" class="bg-gray-700 hover:bg-gray-600 px-4 py-2 rounded-lg text-sm transition">
+                    <i class="fas fa-plus mr-2"></i>Add Competitor
+                </button>
+            </div>
+
+            <!-- Content Opportunities -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h3 class="text-lg font-semibold mb-4 flex items-center">
+                    <i class="fas fa-crosshairs mr-2 text-green-500"></i>
+                    Content Opportunities
+                </h3>
+                <p class="text-gray-400 text-sm mb-4">High-demand keywords related to your brand where you could create content.</p>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <template x-for="opportunity in contentOpportunities" :key="opportunity.keyword">
+                        <div class="p-4 bg-gray-700/50 rounded-lg border border-gray-600">
+                            <div class="flex items-start justify-between mb-2">
+                                <span class="font-medium" x-text="opportunity.keyword"></span>
+                                <span class="text-xs px-2 py-1 rounded" :class="opportunity.difficulty === 'easy' ? 'bg-green-500/20 text-green-400' : opportunity.difficulty === 'medium' ? 'bg-yellow-500/20 text-yellow-400' : 'bg-red-500/20 text-red-400'" x-text="opportunity.difficulty"></span>
+                            </div>
+                            <div class="flex items-center text-sm text-gray-400 mb-3">
+                                <i :class="getPlatformIcon(opportunity.platform)" class="mr-2"></i>
+                                <span x-text="formatVolume(opportunity.volume) + ' searches'"></span>
+                            </div>
+                            <p class="text-xs text-gray-500" x-text="opportunity.reason"></p>
+                        </div>
+                    </template>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Add Brand Modal -->
+    <div x-show="showAddBrand" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showAddBrand = false">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700" @click.stop>
+            <h3 class="text-lg font-semibold mb-4">Add Your Brand</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">Brand Name</label>
+                    <input
+                        x-model="newBrand.name"
+                        type="text"
+                        placeholder="e.g., Nike, Apple, Your Company"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">Keyword Variants (one per line)</label>
+                    <textarea
+                        x-model="newBrand.variants"
+                        rows="4"
+                        placeholder="nike running shoes&#10;nike runners&#10;nike trainers&#10;nike sneakers"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    ></textarea>
+                    <p class="text-xs text-gray-500 mt-1">Include different ways people might search for your brand/product</p>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button @click="showAddBrand = false" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Cancel</button>
+                <button @click="addBrand()" :disabled="!newBrand.name.trim()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg transition">
+                    <i class="fas fa-plus mr-2"></i>Add Brand
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Variant Modal -->
+    <div x-show="showAddVariant" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showAddVariant = false">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700" @click.stop>
+            <h3 class="text-lg font-semibold mb-4">Add Keyword Variants</h3>
+            <div>
+                <label class="block text-sm text-gray-400 mb-2">New Variants (one per line)</label>
+                <textarea
+                    x-model="newVariants"
+                    rows="4"
+                    placeholder="new keyword variant&#10;another variant"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                ></textarea>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button @click="showAddVariant = false" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Cancel</button>
+                <button @click="addVariants()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 rounded-lg transition">
+                    <i class="fas fa-plus mr-2"></i>Add Variants
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Competitor Modal -->
+    <div x-show="showAddCompetitor" x-cloak class="fixed inset-0 z-50 flex items-center justify-center bg-black/60" @click.self="showAddCompetitor = false">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md border border-gray-700" @click.stop>
+            <h3 class="text-lg font-semibold mb-4">Add Competitor</h3>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">Competitor Name</label>
+                    <input
+                        x-model="newCompetitor.name"
+                        type="text"
+                        placeholder="e.g., Adidas, Samsung"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    >
+                </div>
+                <div>
+                    <label class="block text-sm text-gray-400 mb-2">Keywords to Track (one per line)</label>
+                    <textarea
+                        x-model="newCompetitor.keywords"
+                        rows="4"
+                        placeholder="competitor keyword 1&#10;competitor keyword 2"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg p-3 text-white placeholder-gray-500 focus:outline-none focus:border-purple-500"
+                    ></textarea>
+                </div>
+            </div>
+            <div class="flex justify-end space-x-3 mt-6">
+                <button @click="showAddCompetitor = false" class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg transition">Cancel</button>
+                <button @click="addCompetitor()" :disabled="!newCompetitor.name.trim()" class="px-4 py-2 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg transition">
+                    <i class="fas fa-plus mr-2"></i>Add Competitor
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Footer -->
+    <footer class="bg-gray-800 border-t border-gray-700 mt-12">
+        <div class="max-w-7xl mx-auto px-4 py-6 text-center text-gray-500 text-sm">
+            <p>Brand Intelligence by Total Search</p>
+        </div>
+    </footer>
+
+    <script>
+        function brandDashboard() {
+            return {
+                // UI State
+                showAddBrand: false,
+                showAddVariant: false,
+                showAddCompetitor: false,
+                isLoading: false,
+
+                // Data
+                brands: [],
+                selectedBrand: null,
+                competitors: [],
+                alerts: [],
+                contentOpportunities: [],
+
+                // Forms
+                newBrand: { name: '', variants: '' },
+                newVariants: '',
+                newCompetitor: { name: '', keywords: '' },
+
+                // Platform config
+                platforms: [
+                    { id: 'google', name: 'Google', icon: 'fab fa-google', color: 'text-blue-500', barColor: 'bg-blue-500' },
+                    { id: 'youtube', name: 'YouTube', icon: 'fab fa-youtube', color: 'text-red-500', barColor: 'bg-red-500' },
+                    { id: 'amazon', name: 'Amazon', icon: 'fab fa-amazon', color: 'text-orange-500', barColor: 'bg-orange-500' },
+                    { id: 'tiktok', name: 'TikTok', icon: 'fab fa-tiktok', color: 'text-pink-500', barColor: 'bg-pink-500' },
+                    { id: 'instagram', name: 'Instagram', icon: 'fab fa-instagram', color: 'text-purple-500', barColor: 'bg-purple-500' },
+                ],
+
+                // Computed values
+                get bestPlatform() {
+                    if (!this.selectedBrand?.metrics) return null;
+                    let best = null;
+                    let maxVolume = 0;
+                    for (const [platform, data] of Object.entries(this.selectedBrand.metrics)) {
+                        if (data.volume > maxVolume) {
+                            maxVolume = data.volume;
+                            best = platform;
+                        }
+                    }
+                    return best ? this.platforms.find(p => p.id === best)?.name : null;
+                },
+
+                get totalVolume() {
+                    if (!this.selectedBrand?.metrics) return 0;
+                    return Object.values(this.selectedBrand.metrics).reduce((sum, m) => sum + (m.volume || 0), 0);
+                },
+
+                get fastestGrowing() {
+                    if (!this.selectedBrand?.metrics) return null;
+                    let fastest = null;
+                    let maxTrend = 0;
+                    for (const [platform, data] of Object.entries(this.selectedBrand.metrics)) {
+                        if (data.trend > maxTrend) {
+                            maxTrend = data.trend;
+                            fastest = platform;
+                        }
+                    }
+                    return fastest ? this.platforms.find(p => p.id === fastest)?.name : null;
+                },
+
+                get weeklyChange() {
+                    if (!this.selectedBrand?.weeklyChange) return 0;
+                    return this.selectedBrand.weeklyChange;
+                },
+
+                // Initialize
+                init() {
+                    this.loadBrands();
+                },
+
+                // API Methods
+                async loadBrands() {
+                    try {
+                        const response = await fetch('/api/brands');
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.brands = data.brands || [];
+                            if (this.brands.length > 0 && !this.selectedBrand) {
+                                this.selectBrand(this.brands[0]);
+                            }
+                        }
+                    } catch (error) {
+                        console.error('Failed to load brands:', error);
+                    }
+                },
+
+                async selectBrand(brand) {
+                    this.selectedBrand = brand;
+                    await this.loadBrandData(brand.id);
+                },
+
+                async loadBrandData(brandId) {
+                    this.isLoading = true;
+                    try {
+                        const response = await fetch(`/api/brands/${brandId}/metrics`);
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.selectedBrand.metrics = data.metrics || {};
+                            this.selectedBrand.weeklyChange = data.weeklyChange || 0;
+                            this.alerts = data.alerts || [];
+                            this.contentOpportunities = data.opportunities || [];
+                            this.competitors = data.competitors || [];
+                        }
+                    } catch (error) {
+                        console.error('Failed to load brand data:', error);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                async addBrand() {
+                    if (!this.newBrand.name.trim()) return;
+
+                    const variants = this.newBrand.variants
+                        .split('\n')
+                        .map(v => v.trim())
+                        .filter(v => v);
+
+                    // Add brand name itself as a variant if not already included
+                    if (!variants.some(v => v.toLowerCase() === this.newBrand.name.toLowerCase())) {
+                        variants.unshift(this.newBrand.name);
+                    }
+
+                    try {
+                        const response = await fetch('/api/brands', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: this.newBrand.name,
+                                variants: variants
+                            })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.brands.push(data.brand);
+                            this.selectBrand(data.brand);
+                            this.showAddBrand = false;
+                            this.newBrand = { name: '', variants: '' };
+                        } else {
+                            alert('Failed to add brand');
+                        }
+                    } catch (error) {
+                        alert('Error adding brand: ' + error.message);
+                    }
+                },
+
+                async addVariants() {
+                    if (!this.selectedBrand || !this.newVariants.trim()) return;
+
+                    const variants = this.newVariants
+                        .split('\n')
+                        .map(v => v.trim())
+                        .filter(v => v && !this.selectedBrand.variants.includes(v));
+
+                    if (variants.length === 0) {
+                        this.showAddVariant = false;
+                        return;
+                    }
+
+                    try {
+                        const response = await fetch(`/api/brands/${this.selectedBrand.id}/variants`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ variants })
+                        });
+
+                        if (response.ok) {
+                            this.selectedBrand.variants.push(...variants);
+                            this.showAddVariant = false;
+                            this.newVariants = '';
+                            await this.refreshBrandData();
+                        }
+                    } catch (error) {
+                        alert('Error adding variants: ' + error.message);
+                    }
+                },
+
+                async addCompetitor() {
+                    if (!this.selectedBrand || !this.newCompetitor.name.trim()) return;
+
+                    const keywords = this.newCompetitor.keywords
+                        .split('\n')
+                        .map(k => k.trim())
+                        .filter(k => k);
+
+                    // Add competitor name as keyword if not included
+                    if (!keywords.some(k => k.toLowerCase() === this.newCompetitor.name.toLowerCase())) {
+                        keywords.unshift(this.newCompetitor.name);
+                    }
+
+                    try {
+                        const response = await fetch(`/api/brands/${this.selectedBrand.id}/competitors`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                                name: this.newCompetitor.name,
+                                keywords: keywords
+                            })
+                        });
+
+                        if (response.ok) {
+                            const data = await response.json();
+                            this.competitors.push(data.competitor);
+                            this.showAddCompetitor = false;
+                            this.newCompetitor = { name: '', keywords: '' };
+                        }
+                    } catch (error) {
+                        alert('Error adding competitor: ' + error.message);
+                    }
+                },
+
+                async refreshBrandData() {
+                    if (!this.selectedBrand) return;
+                    this.isLoading = true;
+                    try {
+                        const response = await fetch(`/api/brands/${this.selectedBrand.id}/refresh`, {
+                            method: 'POST'
+                        });
+                        if (response.ok) {
+                            await this.loadBrandData(this.selectedBrand.id);
+                        }
+                    } catch (error) {
+                        console.error('Failed to refresh:', error);
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                // Helper methods
+                getPlatformVolume(platformId) {
+                    return this.selectedBrand?.metrics?.[platformId]?.volume || 0;
+                },
+
+                getPlatformTrend(platformId) {
+                    return this.selectedBrand?.metrics?.[platformId]?.trend || 0;
+                },
+
+                getPlatformPercentage(platformId) {
+                    const volume = this.getPlatformVolume(platformId);
+                    const maxVolume = Math.max(...Object.values(this.selectedBrand?.metrics || {}).map(m => m.volume || 0));
+                    return maxVolume > 0 ? (volume / maxVolume) * 100 : 0;
+                },
+
+                getPlatformIcon(platformName) {
+                    const platform = this.platforms.find(p => p.name.toLowerCase() === platformName?.toLowerCase() || p.id === platformName?.toLowerCase());
+                    return platform ? platform.icon : 'fas fa-globe';
+                },
+
+                getCompetitorVolume(competitor, platformId) {
+                    return competitor.metrics?.[platformId]?.volume || 0;
+                },
+
+                getCompetitorTotal(competitor) {
+                    if (!competitor.metrics) return 0;
+                    return Object.values(competitor.metrics).reduce((sum, m) => sum + (m.volume || 0), 0);
+                },
+
+                formatVolume(volume) {
+                    if (volume >= 1000000) return (volume / 1000000).toFixed(1) + 'M';
+                    if (volume >= 1000) return (volume / 1000).toFixed(1) + 'K';
+                    return volume.toString();
+                },
+
+                dismissAlert(alertId) {
+                    this.alerts = this.alerts.filter(a => a.id !== alertId);
+                },
+
+                handleAlertAction(alert, action) {
+                    console.log('Action:', action.type, alert);
+                    // Handle different action types
+                    this.dismissAlert(alert.id);
+                }
+            }
+        }
+    </script>
+</body>
+</html>

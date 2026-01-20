@@ -117,3 +117,113 @@ class UnifiedScore(Base):
 
     def __repr__(self) -> str:
         return f"<UnifiedScore(id={self.id}, keyword_id={self.keyword_id}, score={self.unified_demand_score})>"
+
+
+class Brand(Base):
+    """Brands table - stores brand tracking information."""
+
+    __tablename__ = "brands"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String(200), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+
+    # JSON-encoded list of keyword variants to track
+    variants = Column(Text, nullable=True)
+
+    # Cached aggregated metrics (updated on refresh)
+    cached_metrics = Column(JSON, nullable=True)
+    last_refreshed = Column(DateTime, nullable=True)
+
+    # Relationships
+    competitors = relationship("Competitor", back_populates="brand_rel", cascade="all, delete-orphan")
+    alerts = relationship("BrandAlert", back_populates="brand_rel", cascade="all, delete-orphan")
+
+    __table_args__ = (
+        Index("idx_brands_name", "name"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Brand(id={self.id}, name='{self.name}')>"
+
+    def get_variants(self) -> list[str]:
+        """Get variants as a list."""
+        import json
+        if self.variants:
+            return json.loads(self.variants)
+        return []
+
+    def set_variants(self, variants: list[str]) -> None:
+        """Set variants from a list."""
+        import json
+        self.variants = json.dumps(variants) if variants else None
+
+
+class Competitor(Base):
+    """Competitors table - tracks competitor brands."""
+
+    __tablename__ = "competitors"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(200), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Keywords to track for this competitor
+    keywords = Column(Text, nullable=True)  # JSON-encoded list
+
+    # Cached metrics
+    cached_metrics = Column(JSON, nullable=True)
+
+    # Relationships
+    brand_rel = relationship("Brand", back_populates="competitors")
+
+    __table_args__ = (
+        Index("idx_competitors_brand", "brand_id"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<Competitor(id={self.id}, name='{self.name}')>"
+
+    def get_keywords(self) -> list[str]:
+        """Get keywords as a list."""
+        import json
+        if self.keywords:
+            return json.loads(self.keywords)
+        return []
+
+    def set_keywords(self, keywords: list[str]) -> None:
+        """Set keywords from a list."""
+        import json
+        self.keywords = json.dumps(keywords) if keywords else None
+
+
+class BrandAlert(Base):
+    """Brand alerts table - stores notifications and insights."""
+
+    __tablename__ = "brand_alerts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    brand_id = Column(Integer, ForeignKey("brands.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    alert_type = Column(String(50), nullable=False)  # opportunity, warning, info
+    title = Column(String(500), nullable=False)
+    description = Column(Text, nullable=True)
+    platform = Column(String(50), nullable=True)  # Which platform triggered this
+    dismissed = Column(Integer, default=0, nullable=False)  # 0=active, 1=dismissed
+
+    # Action data (JSON)
+    actions = Column(JSON, nullable=True)
+
+    # Relationships
+    brand_rel = relationship("Brand", back_populates="alerts")
+
+    __table_args__ = (
+        Index("idx_brand_alerts_brand", "brand_id"),
+        Index("idx_brand_alerts_active", "brand_id", "dismissed"),
+    )
+
+    def __repr__(self) -> str:
+        return f"<BrandAlert(id={self.id}, type='{self.alert_type}', title='{self.title[:30]}...')>"
