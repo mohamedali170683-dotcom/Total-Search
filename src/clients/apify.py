@@ -303,7 +303,16 @@ class ApifyClient:
 
             # Collect timestamps for daily posts calculation
             if timestamp := post.get("timestamp"):
-                timestamps.append(timestamp)
+                # Handle both string ISO dates and integer timestamps
+                if isinstance(timestamp, str):
+                    try:
+                        from datetime import datetime
+                        dt = datetime.fromisoformat(timestamp.replace("Z", "+00:00"))
+                        timestamps.append(int(dt.timestamp()))
+                    except (ValueError, TypeError):
+                        pass
+                elif isinstance(timestamp, (int, float)):
+                    timestamps.append(int(timestamp))
 
         post_count = len(posts)
 

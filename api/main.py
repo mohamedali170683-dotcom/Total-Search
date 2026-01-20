@@ -688,6 +688,8 @@ async def get_brand_metrics(brand_id: int):
                 total_volume = 0
                 avg_trend = 0
                 count = 0
+                has_data = False
+                confidence = "none"
 
                 for variant in variants:
                     # Find keyword matching variant
@@ -706,15 +708,25 @@ async def get_brand_metrics(brand_id: int):
                         metric = session.execute(metric_stmt).scalar_one_or_none()
 
                         if metric:
+                            has_data = True
                             volume = metric.search_volume or metric.proxy_score or 0
                             total_volume += volume
                             if metric.trend_velocity:
                                 avg_trend += metric.trend_velocity
                                 count += 1
+                            # Track confidence level
+                            if metric.confidence == "high":
+                                confidence = "high"
+                            elif metric.confidence == "medium" and confidence != "high":
+                                confidence = "medium"
+                            elif confidence == "none":
+                                confidence = metric.confidence or "proxy"
 
                 platform_metrics[platform] = {
                     "volume": total_volume,
                     "trend": round(avg_trend / count * 100, 1) if count > 0 else 0,
+                    "hasData": has_data,
+                    "confidence": confidence,
                 }
 
             # Get active alerts

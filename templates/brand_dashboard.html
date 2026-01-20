@@ -124,7 +124,7 @@
                                     <span class="font-medium" x-text="platform.name"></span>
                                 </div>
                                 <span
-                                    x-show="getPlatformTrend(platform.id) !== 0"
+                                    x-show="getPlatformTrend(platform.id) !== 0 && hasPlatformData(platform.id)"
                                     :class="getPlatformTrend(platform.id) > 0 ? 'text-green-500' : 'text-red-500'"
                                     class="text-xs font-medium flex items-center"
                                 >
@@ -132,14 +132,28 @@
                                     <span x-text="Math.abs(getPlatformTrend(platform.id)) + '%'"></span>
                                 </span>
                             </div>
-                            <div class="text-2xl font-bold mb-2" x-text="formatVolume(getPlatformVolume(platform.id))"></div>
-                            <div class="text-xs text-gray-400">searches/month</div>
+                            <!-- Show volume if we have data -->
+                            <template x-if="hasPlatformData(platform.id)">
+                                <div>
+                                    <div class="text-2xl font-bold mb-2" x-text="formatVolume(getPlatformVolume(platform.id))"></div>
+                                    <div class="text-xs text-gray-400">
+                                        <span x-text="getPlatformConfidence(platform.id) === 'proxy' ? 'engagement score' : 'searches/month'"></span>
+                                    </div>
+                                </div>
+                            </template>
+                            <!-- Show "No data" if API not configured or no results -->
+                            <template x-if="!hasPlatformData(platform.id)">
+                                <div>
+                                    <div class="text-xl text-gray-500 mb-2">No data</div>
+                                    <div class="text-xs text-gray-500" x-text="getPlatformNoDataReason(platform.id)"></div>
+                                </div>
+                            </template>
                             <!-- Volume Bar -->
                             <div class="mt-3 h-2 bg-gray-700 rounded-full overflow-hidden">
                                 <div
                                     class="h-full rounded-full transition-all duration-500"
-                                    :class="platform.barColor"
-                                    :style="'width: ' + getPlatformPercentage(platform.id) + '%'"
+                                    :class="hasPlatformData(platform.id) ? platform.barColor : 'bg-gray-600'"
+                                    :style="'width: ' + (hasPlatformData(platform.id) ? getPlatformPercentage(platform.id) : 5) + '%'"
                                 ></div>
                             </div>
                         </div>
@@ -674,6 +688,25 @@
 
                 getPlatformTrend(platformId) {
                     return this.selectedBrand?.metrics?.[platformId]?.trend || 0;
+                },
+
+                hasPlatformData(platformId) {
+                    return this.selectedBrand?.metrics?.[platformId]?.hasData === true;
+                },
+
+                getPlatformConfidence(platformId) {
+                    return this.selectedBrand?.metrics?.[platformId]?.confidence || 'none';
+                },
+
+                getPlatformNoDataReason(platformId) {
+                    const reasons = {
+                        'youtube': 'API data unavailable',
+                        'amazon': 'API key required',
+                        'tiktok': 'Scraper timeout',
+                        'instagram': 'Scraper timeout',
+                        'google': 'Click refresh to load'
+                    };
+                    return reasons[platformId] || 'No data yet';
                 },
 
                 getPlatformPercentage(platformId) {
