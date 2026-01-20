@@ -1,5 +1,6 @@
-# Core - Cache bust v2
+# Core
 python-dotenv>=1.0.0
+six>=1.16.0  # Required for Vercel build compatibility
 pydantic>=2.0.0
 pydantic-settings>=2.0.0
 httpx>=0.25.0
