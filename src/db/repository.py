@@ -181,10 +181,10 @@ class KeywordRepository:
         }
 
         if self._is_postgres:
-            # PostgreSQL upsert using constraint name
+            # PostgreSQL upsert using index elements (not constraint name)
             stmt = pg_insert(KeywordMetric).values(**values)
             stmt = stmt.on_conflict_do_update(
-                constraint="idx_keyword_metrics_unique",
+                index_elements=["keyword_id", "platform", "collected_date"],
                 set_=update_set,
             )
         else:
@@ -238,10 +238,10 @@ class KeywordRepository:
         }
 
         if self._is_postgres:
-            # PostgreSQL upsert using constraint name
+            # PostgreSQL upsert using index elements (not constraint name)
             stmt = pg_insert(UnifiedScore).values(**values)
             stmt = stmt.on_conflict_do_update(
-                constraint="idx_unified_scores_unique",
+                index_elements=["keyword_id", "collected_date"],
                 set_=update_set,
             )
         else:
