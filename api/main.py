@@ -266,6 +266,103 @@ async def get_stats():
         return {"error": str(e)}
 
 
+@app.get("/api/debug/platform/{platform}")
+async def debug_platform(
+    platform: str,
+    keyword: str = Query(default="lavera", description="Keyword to test")
+):
+    """
+    Debug endpoint to test individual platform APIs and see raw responses.
+
+    Use this to diagnose why platforms return no data.
+    """
+    settings = get_settings()
+    result = {"platform": platform, "keyword": keyword, "raw_response": None, "error": None}
+
+    try:
+        if platform == "google":
+            from src.clients.dataforseo import DataForSEOClient
+            client = DataForSEOClient(settings=settings)
+            try:
+                metrics = await client.get_google_search_volume([keyword])
+                await client.close()
+                result["raw_response"] = {
+                    "metrics_count": len(metrics),
+                    "first_metric": metrics[0].model_dump() if metrics else None,
+                }
+            except Exception as e:
+                result["error"] = f"Google API error: {str(e)}"
+
+        elif platform == "youtube":
+            from src.clients.dataforseo import DataForSEOClient
+            client = DataForSEOClient(settings=settings)
+            try:
+                metrics = await client.get_youtube_search_volume([keyword])
+                await client.close()
+                result["raw_response"] = {
+                    "metrics_count": len(metrics),
+                    "first_metric": metrics[0].model_dump() if metrics else None,
+                }
+            except Exception as e:
+                result["error"] = f"YouTube API error: {str(e)}"
+
+        elif platform == "amazon":
+            from src.clients.junglescout import JungleScoutClient
+            client = JungleScoutClient(settings=settings)
+            result["api_configured"] = bool(settings.junglescout_api_key)
+            if not settings.junglescout_api_key:
+                result["error"] = "Jungle Scout API key not configured"
+            else:
+                try:
+                    metrics = await client.get_amazon_search_volume([keyword])
+                    await client.close()
+                    result["raw_response"] = {
+                        "metrics_count": len(metrics),
+                        "first_metric": metrics[0].model_dump() if metrics else None,
+                    }
+                except Exception as e:
+                    result["error"] = f"Amazon API error: {str(e)}"
+
+        elif platform == "tiktok":
+            from src.clients.apify import ApifyClient
+            client = ApifyClient(settings=settings)
+            result["api_configured"] = bool(settings.apify_api_token.get_secret_value())
+            try:
+                hashtag = keyword.replace(" ", "").lower()
+                data = await client.run_tiktok_hashtag_scraper([hashtag], results_per_hashtag=5, timeout_secs=30)
+                await client.close()
+                result["raw_response"] = {
+                    "hashtags_returned": list(data.keys()),
+                    "first_result": data.get(hashtag, {}),
+                }
+            except Exception as e:
+                result["error"] = f"TikTok API error: {str(e)}"
+
+        elif platform == "instagram":
+            from src.clients.apify import ApifyClient
+            client = ApifyClient(settings=settings)
+            result["api_configured"] = bool(settings.apify_api_token.get_secret_value())
+            try:
+                hashtag = keyword.replace(" ", "").lower()
+                data = await client.run_instagram_hashtag_scraper([hashtag], results_per_hashtag=5, timeout_secs=30)
+                await client.close()
+                result["raw_response"] = {
+                    "hashtags_returned": list(data.keys()),
+                    "first_result": data.get(hashtag, {}),
+                }
+            except Exception as e:
+                result["error"] = f"Instagram API error: {str(e)}"
+        else:
+            result["error"] = f"Unknown platform: {platform}. Use: google, youtube, amazon, tiktok, instagram"
+
+    except Exception as e:
+        import traceback
+        result["error"] = f"Unexpected error: {str(e)}"
+        result["traceback"] = traceback.format_exc()
+
+    return result
+
+
 @app.post("/api/research", response_model=KeywordResearchResponse)
 async def start_research(
     request: KeywordResearchRequest,
