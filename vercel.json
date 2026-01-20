@@ -17,6 +17,10 @@
       "destination": "/api/main.py"
     },
     {
+      "source": "/brand",
+      "destination": "/api/main.py"
+    },
+    {
       "source": "/debug",
       "destination": "/api/main.py"
     },

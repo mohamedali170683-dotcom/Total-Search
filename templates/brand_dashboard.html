@@ -26,17 +26,18 @@
         <div class="max-w-7xl mx-auto px-4 py-4">
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
-                    <i class="fas fa-building text-2xl text-purple-500"></i>
-                    <div>
-                        <h1 class="text-xl font-bold">Brand Intelligence</h1>
-                        <p class="text-xs text-gray-400">Track your brand across all platforms</p>
-                    </div>
+                    <i class="fas fa-search-dollar text-2xl text-blue-500"></i>
+                    <h1 class="text-xl font-bold">Total Search</h1>
+                    <span class="text-xs bg-purple-600 px-2 py-1 rounded">Brand</span>
                 </div>
                 <div class="flex items-center space-x-4">
-                    <a href="/home" class="text-sm text-gray-400 hover:text-white transition">
+                    <a href="/home" class="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition">
                         <i class="fas fa-search mr-1"></i> Keyword Research
                     </a>
-                    <button @click="showAddBrand = true" class="bg-purple-600 hover:bg-purple-700 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2">
+                    <a href="/brand" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium">
+                        <i class="fas fa-building mr-1"></i> Brand Intelligence
+                    </a>
+                    <button @click="showAddBrand = true" class="bg-green-600 hover:bg-green-700 px-4 py-2 rounded-lg text-sm font-medium transition flex items-center space-x-2">
                         <i class="fas fa-plus"></i>
                         <span>Add Brand</span>
                     </button>
