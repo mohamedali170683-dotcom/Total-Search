@@ -397,12 +397,34 @@ async def quick_research(
         async with KeywordPipeline(settings=settings) as pipeline:
             results = await pipeline.run(keyword_list, options)
 
-        # Save to database
+        # Save to database with detailed error tracking
         save_error = None
         saved_ids = []
+        save_details = []
         try:
-            saved_ids = repo.save_batch(results)
-            print(f"Saved {len(saved_ids)} keywords: {saved_ids}")
+            # Manually save each keyword with error tracking
+            from src.db.models import Keyword
+            with repo.get_session() as session:
+                for kw_data in results:
+                    try:
+                        keyword = repo._get_or_create_keyword(session, kw_data.keyword, None)
+                        save_details.append({"keyword": kw_data.keyword, "step": "created", "id": keyword.id})
+
+                        for platform, metrics in kw_data.platforms_dict.items():
+                            if metrics is not None:
+                                repo._save_platform_metrics(session, keyword.id, platform, metrics)
+                        save_details.append({"keyword": kw_data.keyword, "step": "metrics_saved"})
+
+                        repo._save_unified_score(session, keyword.id, kw_data)
+                        save_details.append({"keyword": kw_data.keyword, "step": "unified_saved"})
+
+                        saved_ids.append(keyword.id)
+                    except Exception as kw_e:
+                        import traceback
+                        save_details.append({"keyword": kw_data.keyword, "error": str(kw_e), "traceback": traceback.format_exc()})
+
+                session.commit()
+                save_details.append({"step": "committed"})
         except Exception as save_e:
             import traceback
             save_error = f"Save failed: {save_e}\n{traceback.format_exc()}"
@@ -413,6 +435,7 @@ async def quick_research(
             "keywords": [r.to_rag_document() for r in results],
             "saved_ids": saved_ids,
             "save_error": save_error,
+            "save_details": save_details,
         }
 
     except Exception as e:
