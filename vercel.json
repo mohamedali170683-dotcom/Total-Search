@@ -1,7 +1,5 @@
 {
   "version": 2,
-  "buildCommand": null,
-  "outputDirectory": null,
   "redirects": [
     {
       "source": "/",
@@ -37,7 +35,7 @@
   ],
   "functions": {
     "api/main.py": {
-      "runtime": "@vercel/python@4.4.0",
+      "runtime": "@vercel/python@4.5.1",
       "maxDuration": 60
     }
   }

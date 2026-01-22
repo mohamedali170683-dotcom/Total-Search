@@ -1,11 +1,8 @@
-# Minimal ignore - let Vercel handle Python files naturally
 .git/
 .venv/
 venv/
 .env
 .env.local
-*.md
-!README.md
 .DS_Store
 tests/
 .pytest_cache/
