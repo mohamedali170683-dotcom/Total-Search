@@ -1,5 +1,4 @@
-# Python cache files
-__pycache__/
+# Python cache files - DO NOT ignore __pycache__, Vercel needs it
 *.py[cod]
 *$py.class
 
