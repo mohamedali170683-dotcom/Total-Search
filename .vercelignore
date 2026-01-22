@@ -1,44 +1,12 @@
-# Python cache files - DO NOT ignore __pycache__, Vercel needs it
-*.py[cod]
-*$py.class
-
-# Virtual environments
+# Minimal ignore - let Vercel handle Python files naturally
+.git/
 .venv/
 venv/
-ENV/
-env/
-
-# Testing
-.pytest_cache/
-.coverage
-htmlcov/
-tests/
-
-# Type checking
-.mypy_cache/
-
-# Linting
-.ruff_cache/
-
-# IDE
-.vscode/
-.idea/
-
-# Data directories (not needed for deploy)
-data/output/*
-data/checkpoints/*
-
-# Local environment
 .env
 .env.local
-
-# Git
-.git/
-.gitignore
-
-# Documentation
 *.md
 !README.md
-
-# OS
 .DS_Store
+tests/
+.pytest_cache/
+.coverage
