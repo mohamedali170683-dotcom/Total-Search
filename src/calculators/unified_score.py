@@ -27,11 +27,12 @@ class UnifiedScoreCalculator:
     """
 
     DEFAULT_WEIGHTS = {
-        Platform.GOOGLE: 0.30,
-        Platform.YOUTUBE: 0.20,
-        Platform.AMAZON: 0.20,
-        Platform.TIKTOK: 0.15,
-        Platform.INSTAGRAM: 0.15,
+        Platform.GOOGLE: 0.25,
+        Platform.YOUTUBE: 0.18,
+        Platform.AMAZON: 0.18,
+        Platform.TIKTOK: 0.13,
+        Platform.INSTAGRAM: 0.13,
+        Platform.PINTEREST: 0.13,
     }
 
     # Normalization parameters (calibrated for typical search volumes)
@@ -237,47 +238,62 @@ class WeightPresets:
 
     # Balanced weights for general analysis
     BALANCED = {
-        Platform.GOOGLE: 0.25,
-        Platform.YOUTUBE: 0.20,
-        Platform.AMAZON: 0.20,
-        Platform.TIKTOK: 0.20,
-        Platform.INSTAGRAM: 0.15,
+        Platform.GOOGLE: 0.22,
+        Platform.YOUTUBE: 0.17,
+        Platform.AMAZON: 0.17,
+        Platform.TIKTOK: 0.15,
+        Platform.INSTAGRAM: 0.14,
+        Platform.PINTEREST: 0.15,
     }
 
-    # E-commerce focused (Amazon weighted higher)
+    # E-commerce focused (Amazon + Pinterest weighted higher)
     ECOMMERCE = {
-        Platform.GOOGLE: 0.20,
-        Platform.YOUTUBE: 0.10,
-        Platform.AMAZON: 0.45,
-        Platform.TIKTOK: 0.15,
-        Platform.INSTAGRAM: 0.10,
+        Platform.GOOGLE: 0.15,
+        Platform.YOUTUBE: 0.08,
+        Platform.AMAZON: 0.40,
+        Platform.TIKTOK: 0.10,
+        Platform.INSTAGRAM: 0.07,
+        Platform.PINTEREST: 0.20,
     }
 
     # Content/Influencer focused (social platforms weighted higher)
     CONTENT = {
-        Platform.GOOGLE: 0.15,
-        Platform.YOUTUBE: 0.25,
-        Platform.AMAZON: 0.10,
-        Platform.TIKTOK: 0.30,
+        Platform.GOOGLE: 0.12,
+        Platform.YOUTUBE: 0.20,
+        Platform.AMAZON: 0.08,
+        Platform.TIKTOK: 0.25,
         Platform.INSTAGRAM: 0.20,
+        Platform.PINTEREST: 0.15,
     }
 
     # SEO focused (Google weighted higher)
     SEO = {
-        Platform.GOOGLE: 0.50,
-        Platform.YOUTUBE: 0.20,
+        Platform.GOOGLE: 0.45,
+        Platform.YOUTUBE: 0.18,
         Platform.AMAZON: 0.10,
         Platform.TIKTOK: 0.10,
-        Platform.INSTAGRAM: 0.10,
+        Platform.INSTAGRAM: 0.07,
+        Platform.PINTEREST: 0.10,
     }
 
     # Video content focused
     VIDEO = {
-        Platform.GOOGLE: 0.15,
-        Platform.YOUTUBE: 0.45,
-        Platform.AMAZON: 0.10,
+        Platform.GOOGLE: 0.12,
+        Platform.YOUTUBE: 0.40,
+        Platform.AMAZON: 0.08,
         Platform.TIKTOK: 0.25,
         Platform.INSTAGRAM: 0.05,
+        Platform.PINTEREST: 0.10,
+    }
+
+    # Lifestyle/Visual (Pinterest + Instagram heavy - beauty, fashion, home, food)
+    LIFESTYLE = {
+        Platform.GOOGLE: 0.15,
+        Platform.YOUTUBE: 0.12,
+        Platform.AMAZON: 0.13,
+        Platform.TIKTOK: 0.15,
+        Platform.INSTAGRAM: 0.20,
+        Platform.PINTEREST: 0.25,
     }
 
     @classmethod
@@ -289,5 +305,18 @@ class WeightPresets:
             "content": cls.CONTENT,
             "seo": cls.SEO,
             "video": cls.VIDEO,
+            "lifestyle": cls.LIFESTYLE,
         }
         return presets.get(name.lower(), cls.BALANCED)
+
+    @classmethod
+    def list_presets(cls) -> dict[str, str]:
+        """List available presets with descriptions."""
+        return {
+            "balanced": "General analysis across all platforms",
+            "ecommerce": "Amazon + Pinterest weighted for shopping intent",
+            "content": "Social platforms weighted for content creators",
+            "seo": "Google weighted for organic search focus",
+            "video": "YouTube + TikTok weighted for video content",
+            "lifestyle": "Pinterest + Instagram for visual/lifestyle brands",
+        }

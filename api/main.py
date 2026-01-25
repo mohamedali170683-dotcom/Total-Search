@@ -1,6 +1,7 @@
 """FastAPI application for keyword research tool."""
 
 import asyncio
+import io
 import json
 import os
 import sys
@@ -1117,6 +1118,1074 @@ async def generate_brand_alerts(brand_id: int, results: list):
 
     except Exception as e:
         print(f"Alert generation error: {e}")
+
+
+# =============================================================================
+# Demand Distribution API - Core Feature for Cross-Platform Analysis
+# =============================================================================
+
+@app.get("/demand")
+async def demand_distribution_page(request: Request):
+    """Render the demand distribution dashboard - the main analysis view."""
+    return templates.TemplateResponse(
+        "demand_distribution.html",
+        {"request": request}
+    )
+
+
+@app.get("/compare")
+async def compare_page(request: Request):
+    """Render the competitor comparison dashboard."""
+    return templates.TemplateResponse(
+        "compare.html",
+        {"request": request}
+    )
+
+
+class DemandAnalysisRequest(BaseModel):
+    """Request for demand distribution analysis."""
+    keywords: list[str] = Field(..., min_length=1, max_length=50, description="Keywords to analyze")
+    include_competitors: bool = Field(default=False, description="Include competitor comparison")
+    competitor_keywords: list[str] | None = Field(default=None, description="Competitor keywords to compare")
+
+
+@app.get("/api/demand/analyze")
+async def analyze_demand_distribution(
+    keywords: str = Query(..., description="Comma-separated keywords to analyze"),
+    refresh: bool = Query(default=False, description="Force refresh data from APIs"),
+):
+    """
+    Analyze demand distribution across all platforms for given keywords.
+
+    Returns:
+    - Total demand volume across all platforms
+    - Per-platform breakdown with volumes and percentages
+    - Platform-specific insights and recommendations
+    - Trend analysis
+    """
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    keyword_list = [k.strip() for k in keywords.split(",") if k.strip()]
+
+    if len(keyword_list) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 keywords per request")
+
+    try:
+        from src.db.models import Keyword, KeywordMetric
+        from sqlalchemy import select
+
+        # Check if we have recent data (< 24 hours) or need to refresh
+        results = {}
+        keywords_to_fetch = []
+
+        with repo.get_session() as session:
+            for kw in keyword_list:
+                # Check for existing data
+                stmt = select(Keyword).where(Keyword.keyword == kw)
+                existing = session.execute(stmt).scalar_one_or_none()
+
+                if existing and not refresh:
+                    # Get metrics for all platforms
+                    metrics_stmt = (
+                        select(KeywordMetric)
+                        .where(KeywordMetric.keyword_id == existing.id)
+                        .order_by(KeywordMetric.collected_at.desc())
+                    )
+                    metrics = session.execute(metrics_stmt).scalars().all()
+
+                    # Check if data is recent (within 24 hours)
+                    from datetime import datetime, timedelta
+                    recent_cutoff = datetime.utcnow() - timedelta(hours=24)
+                    recent_metrics = [m for m in metrics if m.collected_at > recent_cutoff]
+
+                    if recent_metrics:
+                        results[kw] = _aggregate_keyword_metrics(recent_metrics)
+                    else:
+                        keywords_to_fetch.append(kw)
+                else:
+                    keywords_to_fetch.append(kw)
+
+        # Fetch data for keywords we don't have
+        if keywords_to_fetch:
+            fetched_data = await _fetch_demand_data(keywords_to_fetch)
+            results.update(fetched_data)
+
+        # Calculate demand distribution
+        distribution = _calculate_demand_distribution(results)
+
+        return {
+            "keywords": keyword_list,
+            "total_demand": distribution["total_volume"],
+            "platforms": distribution["platforms"],
+            "distribution_summary": distribution["summary"],
+            "insights": distribution["insights"],
+            "recommendations": distribution["recommendations"],
+            "keyword_details": results,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}\n{traceback.format_exc()}")
+
+
+@app.get("/api/demand/compare")
+async def compare_demand(
+    brand_keywords: str = Query(..., description="Your brand keywords (comma-separated)"),
+    competitor_keywords: str = Query(..., description="Competitor keywords (comma-separated)"),
+):
+    """
+    Compare demand distribution between your brand and competitors.
+
+    Shows share of voice across platforms.
+    """
+    brand_kws = [k.strip() for k in brand_keywords.split(",") if k.strip()]
+    competitor_kws = [k.strip() for k in competitor_keywords.split(",") if k.strip()]
+
+    if len(brand_kws) + len(competitor_kws) > 30:
+        raise HTTPException(status_code=400, detail="Maximum 30 total keywords")
+
+    try:
+        # Fetch data for both sets
+        brand_data = await _fetch_demand_data(brand_kws)
+        competitor_data = await _fetch_demand_data(competitor_kws)
+
+        brand_distribution = _calculate_demand_distribution(brand_data)
+        competitor_distribution = _calculate_demand_distribution(competitor_data)
+
+        # Calculate share of voice
+        share_of_voice = _calculate_share_of_voice(brand_distribution, competitor_distribution)
+
+        return {
+            "brand": {
+                "keywords": brand_kws,
+                "total_demand": brand_distribution["total_volume"],
+                "platforms": brand_distribution["platforms"],
+            },
+            "competitor": {
+                "keywords": competitor_kws,
+                "total_demand": competitor_distribution["total_volume"],
+                "platforms": competitor_distribution["platforms"],
+            },
+            "share_of_voice": share_of_voice,
+            "insights": _generate_competitive_insights(brand_distribution, competitor_distribution),
+        }
+
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Comparison failed: {str(e)}")
+
+
+async def _fetch_demand_data(keywords: list[str]) -> dict:
+    """Fetch demand data from all platforms for keywords."""
+    settings = get_settings()
+
+    # Use all 6 platforms
+    all_platforms = [
+        Platform.GOOGLE, Platform.YOUTUBE, Platform.AMAZON,
+        Platform.TIKTOK, Platform.INSTAGRAM, Platform.PINTEREST
+    ]
+
+    options = PipelineOptions(
+        platforms=all_platforms,
+        weight_preset="balanced",
+        batch_size=10,
+        save_checkpoints=False,
+        tiktok_results_per_hashtag=10,
+        instagram_results_per_hashtag=10,
+    )
+
+    results = {}
+
+    try:
+        async with KeywordPipeline(settings=settings) as pipeline:
+            pipeline_results = await pipeline.run(keywords, options)
+
+        # Save to database
+        if repo and pipeline_results:
+            repo.save_batch(pipeline_results)
+
+        # Convert to dict format
+        for result in pipeline_results:
+            results[result.keyword] = {
+                "unified_score": result.unified_demand_score,
+                "trend": result.cross_platform_trend.value if result.cross_platform_trend else "stable",
+                "best_platform": result.best_platform.value if result.best_platform else None,
+                "platforms": {}
+            }
+
+            # Add per-platform data
+            for platform, metrics in result.platforms_dict.items():
+                if metrics:
+                    results[result.keyword]["platforms"][platform.value] = {
+                        "volume": metrics.effective_volume,
+                        "trend": metrics.trend.value if metrics.trend else "stable",
+                        "trend_velocity": metrics.trend_velocity,
+                        "confidence": metrics.confidence.value,
+                    }
+                else:
+                    results[result.keyword]["platforms"][platform.value] = {
+                        "volume": 0,
+                        "trend": None,
+                        "trend_velocity": None,
+                        "confidence": "none",
+                    }
+
+    except Exception as e:
+        import logging
+        logging.error(f"Error fetching demand data: {e}")
+        # Return empty results for failed keywords
+        for kw in keywords:
+            if kw not in results:
+                results[kw] = {
+                    "unified_score": 0,
+                    "trend": "unknown",
+                    "best_platform": None,
+                    "platforms": {},
+                    "error": str(e),
+                }
+
+    return results
+
+
+def _aggregate_keyword_metrics(metrics: list) -> dict:
+    """Aggregate metrics from database into demand data format."""
+    result = {
+        "unified_score": 0,
+        "trend": "stable",
+        "best_platform": None,
+        "platforms": {}
+    }
+
+    platform_volumes = {}
+
+    for metric in metrics:
+        platform = metric.platform
+        volume = metric.search_volume or metric.proxy_score or 0
+
+        # Keep most recent per platform
+        if platform not in result["platforms"] or volume > result["platforms"][platform].get("volume", 0):
+            result["platforms"][platform] = {
+                "volume": volume,
+                "trend": metric.trend,
+                "trend_velocity": metric.trend_velocity,
+                "confidence": metric.confidence or "proxy",
+            }
+            platform_volumes[platform] = volume
+
+    # Determine best platform
+    if platform_volumes:
+        result["best_platform"] = max(platform_volumes, key=platform_volumes.get)
+
+    return result
+
+
+def _calculate_demand_distribution(keyword_data: dict) -> dict:
+    """Calculate demand distribution across platforms."""
+    platform_totals = {
+        "google": 0,
+        "youtube": 0,
+        "amazon": 0,
+        "tiktok": 0,
+        "instagram": 0,
+        "pinterest": 0,
+    }
+
+    platform_trends = {p: [] for p in platform_totals}
+
+    # Aggregate volumes across all keywords
+    for kw, data in keyword_data.items():
+        platforms = data.get("platforms", {})
+        for platform, metrics in platforms.items():
+            if platform in platform_totals:
+                volume = metrics.get("volume", 0) if isinstance(metrics, dict) else 0
+                platform_totals[platform] += volume
+
+                trend = metrics.get("trend") if isinstance(metrics, dict) else None
+                if trend:
+                    platform_trends[platform].append(trend)
+
+    # Calculate total
+    total_volume = sum(platform_totals.values())
+
+    # Build platform breakdown with percentages
+    platforms = []
+    for platform, volume in sorted(platform_totals.items(), key=lambda x: -x[1]):
+        percentage = (volume / total_volume * 100) if total_volume > 0 else 0
+
+        # Calculate aggregate trend for platform
+        trends = platform_trends[platform]
+        if trends:
+            growing = trends.count("growing")
+            declining = trends.count("declining")
+            if growing > declining:
+                trend = "growing"
+            elif declining > growing:
+                trend = "declining"
+            else:
+                trend = "stable"
+        else:
+            trend = "stable"
+
+        platforms.append({
+            "platform": platform,
+            "volume": volume,
+            "percentage": round(percentage, 1),
+            "trend": trend,
+            "display_name": _get_platform_display_name(platform),
+            "icon": _get_platform_icon(platform),
+            "color": _get_platform_color(platform),
+        })
+
+    # Generate summary
+    google_share = platform_totals["google"] / total_volume * 100 if total_volume > 0 else 0
+    non_google_share = 100 - google_share
+
+    summary = {
+        "total_volume": total_volume,
+        "google_share": round(google_share, 1),
+        "non_google_share": round(non_google_share, 1),
+        "top_platform": platforms[0]["platform"] if platforms else None,
+        "platform_count": len([p for p in platforms if p["volume"] > 0]),
+    }
+
+    # Generate insights
+    insights = _generate_demand_insights(platforms, summary)
+
+    # Generate recommendations
+    recommendations = _generate_demand_recommendations(platforms, summary)
+
+    return {
+        "total_volume": total_volume,
+        "platforms": platforms,
+        "summary": summary,
+        "insights": insights,
+        "recommendations": recommendations,
+    }
+
+
+def _get_platform_display_name(platform: str) -> str:
+    """Get display name for platform."""
+    names = {
+        "google": "Google Search",
+        "youtube": "YouTube",
+        "amazon": "Amazon",
+        "tiktok": "TikTok",
+        "instagram": "Instagram",
+        "pinterest": "Pinterest",
+    }
+    return names.get(platform, platform.title())
+
+
+def _get_platform_icon(platform: str) -> str:
+    """Get Font Awesome icon class for platform."""
+    icons = {
+        "google": "fab fa-google",
+        "youtube": "fab fa-youtube",
+        "amazon": "fab fa-amazon",
+        "tiktok": "fab fa-tiktok",
+        "instagram": "fab fa-instagram",
+        "pinterest": "fab fa-pinterest",
+    }
+    return icons.get(platform, "fas fa-search")
+
+
+def _get_platform_color(platform: str) -> str:
+    """Get brand color for platform."""
+    colors = {
+        "google": "#4285F4",
+        "youtube": "#FF0000",
+        "amazon": "#FF9900",
+        "tiktok": "#000000",
+        "instagram": "#E1306C",
+        "pinterest": "#E60023",
+    }
+    return colors.get(platform, "#6B7280")
+
+
+def _generate_demand_insights(platforms: list, summary: dict) -> list[dict]:
+    """Generate insights about demand distribution."""
+    insights = []
+
+    # Insight: Non-Google opportunity
+    if summary["non_google_share"] > 40:
+        insights.append({
+            "type": "opportunity",
+            "title": f"{summary['non_google_share']}% of demand is outside Google",
+            "description": "A significant portion of search demand exists on other platforms. Consider diversifying your search strategy.",
+            "priority": "high",
+        })
+
+    # Insight: Platform-specific opportunities
+    for p in platforms:
+        if p["volume"] > 0 and p["trend"] == "growing":
+            insights.append({
+                "type": "trend",
+                "title": f"{p['display_name']} demand is growing",
+                "description": f"Search volume on {p['display_name']} is trending upward. This platform may warrant increased investment.",
+                "priority": "medium",
+                "platform": p["platform"],
+            })
+
+    # Insight: Amazon for e-commerce
+    amazon_data = next((p for p in platforms if p["platform"] == "amazon"), None)
+    if amazon_data and amazon_data["percentage"] > 15:
+        insights.append({
+            "type": "ecommerce",
+            "title": f"{amazon_data['percentage']}% of demand is on Amazon",
+            "description": "Strong purchase intent signals. Ensure your Amazon presence and advertising are optimized.",
+            "priority": "high",
+            "platform": "amazon",
+        })
+
+    # Insight: Social search (TikTok + Instagram)
+    social_volume = sum(p["volume"] for p in platforms if p["platform"] in ["tiktok", "instagram"])
+    social_percentage = (social_volume / summary["total_volume"] * 100) if summary["total_volume"] > 0 else 0
+    if social_percentage > 10:
+        insights.append({
+            "type": "social",
+            "title": f"{round(social_percentage, 1)}% of demand is on social platforms",
+            "description": "Social search is significant for this query. Consider content strategies for TikTok and Instagram.",
+            "priority": "medium",
+        })
+
+    # Insight: Pinterest for visual/lifestyle
+    pinterest_data = next((p for p in platforms if p["platform"] == "pinterest"), None)
+    if pinterest_data and pinterest_data["percentage"] > 8:
+        insights.append({
+            "type": "visual",
+            "title": f"{pinterest_data['percentage']}% of demand is on Pinterest",
+            "description": "Pinterest users are in planning/aspiration mode. Create visual content and shopping pins.",
+            "priority": "medium",
+            "platform": "pinterest",
+        })
+
+    return insights[:5]  # Limit to top 5 insights
+
+
+def _generate_demand_recommendations(platforms: list, summary: dict) -> list[dict]:
+    """Generate actionable recommendations based on demand distribution."""
+    recommendations = []
+
+    platform_data = {p["platform"]: p for p in platforms}
+
+    # Recommendation based on top platform
+    if summary["top_platform"]:
+        top = platform_data[summary["top_platform"]]
+        recommendations.append({
+            "platform": top["platform"],
+            "action": f"Prioritize {top['display_name']}",
+            "description": f"With {top['percentage']}% of demand, this is your primary channel for this keyword set.",
+            "tactics": _get_platform_tactics(top["platform"]),
+        })
+
+    # Recommendations for underutilized high-volume platforms
+    for p in platforms[1:4]:  # Next 3 platforms after top
+        if p["volume"] > 0 and p["percentage"] > 10:
+            recommendations.append({
+                "platform": p["platform"],
+                "action": f"Expand to {p['display_name']}",
+                "description": f"{p['percentage']}% of demand represents a significant opportunity.",
+                "tactics": _get_platform_tactics(p["platform"]),
+            })
+
+    return recommendations[:4]  # Limit to top 4 recommendations
+
+
+def _get_platform_tactics(platform: str) -> list[str]:
+    """Get tactical recommendations for each platform."""
+    tactics = {
+        "google": ["Google Ads Search campaigns", "SEO optimization", "Google Shopping (if e-commerce)"],
+        "youtube": ["Video ad campaigns", "Creator partnerships", "SEO for video content"],
+        "amazon": ["Sponsored Products", "Amazon DSP", "Listing optimization"],
+        "tiktok": ["Spark Ads", "Hashtag challenges", "Creator marketplace"],
+        "instagram": ["Reels ads", "Shopping tags", "Influencer partnerships"],
+        "pinterest": ["Shopping pins", "Idea pins", "Pinterest Ads"],
+    }
+    return tactics.get(platform, ["Platform-specific advertising", "Content optimization"])
+
+
+def _calculate_share_of_voice(brand: dict, competitor: dict) -> dict:
+    """Calculate share of voice between brand and competitor."""
+    share_of_voice = {"overall": {}, "by_platform": {}}
+
+    # Overall share
+    brand_total = brand["total_volume"]
+    competitor_total = competitor["total_volume"]
+    total = brand_total + competitor_total
+
+    if total > 0:
+        share_of_voice["overall"] = {
+            "brand": round(brand_total / total * 100, 1),
+            "competitor": round(competitor_total / total * 100, 1),
+        }
+
+    # Per-platform share
+    brand_platforms = {p["platform"]: p["volume"] for p in brand["platforms"]}
+    competitor_platforms = {p["platform"]: p["volume"] for p in competitor["platforms"]}
+
+    all_platforms = set(brand_platforms.keys()) | set(competitor_platforms.keys())
+
+    for platform in all_platforms:
+        brand_vol = brand_platforms.get(platform, 0)
+        comp_vol = competitor_platforms.get(platform, 0)
+        platform_total = brand_vol + comp_vol
+
+        if platform_total > 0:
+            share_of_voice["by_platform"][platform] = {
+                "brand": round(brand_vol / platform_total * 100, 1),
+                "competitor": round(comp_vol / platform_total * 100, 1),
+                "brand_volume": brand_vol,
+                "competitor_volume": comp_vol,
+            }
+
+    return share_of_voice
+
+
+def _generate_competitive_insights(brand: dict, competitor: dict) -> list[dict]:
+    """Generate insights from competitive comparison."""
+    insights = []
+
+    brand_platforms = {p["platform"]: p for p in brand["platforms"]}
+    competitor_platforms = {p["platform"]: p for p in competitor["platforms"]}
+
+    # Find platforms where competitor is stronger
+    for platform in brand_platforms:
+        brand_vol = brand_platforms[platform]["volume"]
+        comp_vol = competitor_platforms.get(platform, {}).get("volume", 0)
+
+        if comp_vol > brand_vol * 1.5:  # Competitor is 50%+ stronger
+            insights.append({
+                "type": "gap",
+                "title": f"Competitor dominates on {_get_platform_display_name(platform)}",
+                "description": f"They have {comp_vol:,} vs your {brand_vol:,}. Consider increasing presence.",
+                "platform": platform,
+            })
+        elif brand_vol > comp_vol * 1.5:  # We're stronger
+            insights.append({
+                "type": "strength",
+                "title": f"You lead on {_get_platform_display_name(platform)}",
+                "description": f"You have {brand_vol:,} vs their {comp_vol:,}. Maintain this advantage.",
+                "platform": platform,
+            })
+
+    return insights
+
+
+# =============================================================================
+# Historical Data & Trending API Endpoints
+# =============================================================================
+
+@app.get("/api/demand/history")
+async def get_keyword_history(
+    keyword: str = Query(..., description="Keyword to get history for"),
+    days: int = Query(default=90, ge=1, le=365, description="Days of history"),
+):
+    """
+    Get historical demand data for a single keyword across all platforms.
+
+    Returns time series data showing how demand has changed over time.
+    """
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    try:
+        history = repo.get_keyword_history(keyword, days=days)
+
+        if history.get("error"):
+            raise HTTPException(status_code=404, detail=history["error"])
+
+        # Enrich with platform display names and colors
+        enriched_history = {}
+        for platform, data_points in history.get("history", {}).items():
+            enriched_history[platform] = {
+                "display_name": _get_platform_display_name(platform),
+                "color": _get_platform_color(platform),
+                "icon": _get_platform_icon(platform),
+                "data": data_points,
+            }
+
+        return {
+            "keyword": keyword,
+            "days": days,
+            "platforms": enriched_history,
+            "unified_history": history.get("unified_history", []),
+            "summary": _generate_history_summary(history),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get history: {str(e)}")
+
+
+@app.get("/api/demand/trending")
+async def get_trending_keywords(
+    platform: str | None = Query(default=None, description="Filter by platform"),
+    limit: int = Query(default=20, ge=1, le=100, description="Number of results"),
+):
+    """
+    Get keywords with the highest growth trends.
+
+    Useful for identifying emerging opportunities.
+    """
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    try:
+        trending = repo.get_trending_keywords(platform=platform, limit=limit)
+
+        # Group by keyword for cleaner response
+        keyword_trends = {}
+        for item in trending:
+            kw = item["keyword"]
+            if kw not in keyword_trends:
+                keyword_trends[kw] = {
+                    "keyword": kw,
+                    "platforms": [],
+                    "max_velocity": 0,
+                }
+
+            keyword_trends[kw]["platforms"].append({
+                "platform": item["platform"],
+                "display_name": _get_platform_display_name(item["platform"]),
+                "volume": item["volume"],
+                "trend_velocity": item["trend_velocity"],
+            })
+
+            if item["trend_velocity"] and item["trend_velocity"] > keyword_trends[kw]["max_velocity"]:
+                keyword_trends[kw]["max_velocity"] = item["trend_velocity"]
+
+        # Sort by max velocity
+        sorted_keywords = sorted(
+            keyword_trends.values(),
+            key=lambda x: x["max_velocity"] or 0,
+            reverse=True
+        )
+
+        return {
+            "trending": sorted_keywords,
+            "filter": {"platform": platform},
+            "count": len(sorted_keywords),
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get trending: {str(e)}")
+
+
+@app.get("/api/demand/timeseries")
+async def get_demand_timeseries(
+    keywords: str = Query(..., description="Comma-separated keywords"),
+    days: int = Query(default=30, ge=1, le=90, description="Days of history"),
+):
+    """
+    Get aggregated demand time series for multiple keywords.
+
+    Useful for tracking brand/category demand over time.
+    """
+    if repo is None:
+        raise HTTPException(status_code=500, detail="Repository not initialized")
+
+    keyword_list = [k.strip() for k in keywords.split(",") if k.strip()]
+
+    if len(keyword_list) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 keywords")
+
+    try:
+        timeseries = repo.get_demand_over_time(keyword_list, days=days)
+
+        if timeseries.get("error"):
+            raise HTTPException(status_code=404, detail=timeseries["error"])
+
+        # Calculate growth metrics
+        time_series_data = timeseries.get("time_series", [])
+        growth_analysis = _analyze_timeseries_growth(time_series_data)
+
+        # Enrich time series with platform colors
+        enriched_series = []
+        for entry in time_series_data:
+            enriched_entry = {
+                "date": entry["date"],
+                "total": entry["total"],
+                "platforms": {}
+            }
+            for platform, volume in entry.get("platforms", {}).items():
+                enriched_entry["platforms"][platform] = {
+                    "volume": volume,
+                    "color": _get_platform_color(platform),
+                }
+            enriched_series.append(enriched_entry)
+
+        return {
+            "keywords": keyword_list,
+            "days": days,
+            "time_series": enriched_series,
+            "growth": growth_analysis,
+            "platform_totals": _calculate_platform_totals(time_series_data),
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get timeseries: {str(e)}")
+
+
+def _generate_history_summary(history: dict) -> dict:
+    """Generate summary statistics from historical data."""
+    summary = {
+        "platforms_tracked": len(history.get("history", {})),
+        "data_points": 0,
+        "first_date": None,
+        "last_date": None,
+        "overall_trend": "stable",
+    }
+
+    all_dates = []
+    trend_scores = []
+
+    for platform, data_points in history.get("history", {}).items():
+        summary["data_points"] += len(data_points)
+        for dp in data_points:
+            if dp.get("date"):
+                all_dates.append(dp["date"])
+            if dp.get("trend") == "growing":
+                trend_scores.append(1)
+            elif dp.get("trend") == "declining":
+                trend_scores.append(-1)
+            else:
+                trend_scores.append(0)
+
+    if all_dates:
+        summary["first_date"] = min(all_dates)
+        summary["last_date"] = max(all_dates)
+
+    if trend_scores:
+        avg_trend = sum(trend_scores) / len(trend_scores)
+        if avg_trend > 0.3:
+            summary["overall_trend"] = "growing"
+        elif avg_trend < -0.3:
+            summary["overall_trend"] = "declining"
+
+    return summary
+
+
+def _analyze_timeseries_growth(time_series: list) -> dict:
+    """Analyze growth patterns in time series data."""
+    if len(time_series) < 2:
+        return {"status": "insufficient_data", "change_percent": 0}
+
+    # Compare first half vs second half
+    midpoint = len(time_series) // 2
+    first_half = time_series[:midpoint]
+    second_half = time_series[midpoint:]
+
+    first_total = sum(entry.get("total", 0) for entry in first_half)
+    second_total = sum(entry.get("total", 0) for entry in second_half)
+
+    if first_total > 0:
+        change_percent = ((second_total - first_total) / first_total) * 100
+    else:
+        change_percent = 100 if second_total > 0 else 0
+
+    status = "stable"
+    if change_percent > 10:
+        status = "growing"
+    elif change_percent < -10:
+        status = "declining"
+
+    return {
+        "status": status,
+        "change_percent": round(change_percent, 1),
+        "first_period_total": first_total,
+        "second_period_total": second_total,
+    }
+
+
+def _calculate_platform_totals(time_series: list) -> dict:
+    """Calculate total volume by platform from time series."""
+    totals = {}
+
+    for entry in time_series:
+        for platform, volume in entry.get("platforms", {}).items():
+            if platform not in totals:
+                totals[platform] = {
+                    "volume": 0,
+                    "display_name": _get_platform_display_name(platform),
+                    "color": _get_platform_color(platform),
+                }
+            totals[platform]["volume"] += volume
+
+    return totals
+
+
+# =============================================================================
+# Export API - PDF and PowerPoint Reports
+# =============================================================================
+
+@app.get("/api/export/pdf")
+async def export_demand_pdf(
+    keywords: str = Query(..., description="Comma-separated keywords"),
+    title: str = Query(default="Demand Distribution Analysis", description="Report title"),
+    refresh: bool = Query(default=False, description="Force refresh data"),
+):
+    """
+    Export demand analysis as a PDF report.
+
+    Generates a professional PDF with:
+    - Executive summary
+    - Platform breakdown table
+    - Distribution pie chart
+    - Key insights
+    - Recommendations
+    """
+    from fastapi.responses import StreamingResponse
+
+    # First get the analysis data
+    keyword_list = [k.strip() for k in keywords.split(",") if k.strip()]
+
+    if len(keyword_list) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 keywords")
+
+    try:
+        # Get analysis data (reuse existing logic)
+        from src.db.models import Keyword, KeywordMetric
+        from sqlalchemy import select
+        from datetime import timedelta
+
+        results = {}
+        keywords_to_fetch = []
+
+        if repo:
+            with repo.get_session() as session:
+                for kw in keyword_list:
+                    stmt = select(Keyword).where(Keyword.keyword == kw)
+                    existing = session.execute(stmt).scalar_one_or_none()
+
+                    if existing and not refresh:
+                        metrics_stmt = (
+                            select(KeywordMetric)
+                            .where(KeywordMetric.keyword_id == existing.id)
+                            .order_by(KeywordMetric.collected_at.desc())
+                        )
+                        metrics = session.execute(metrics_stmt).scalars().all()
+                        recent_cutoff = datetime.utcnow() - timedelta(hours=24)
+                        recent_metrics = [m for m in metrics if m.collected_at > recent_cutoff]
+
+                        if recent_metrics:
+                            results[kw] = _aggregate_keyword_metrics(recent_metrics)
+                        else:
+                            keywords_to_fetch.append(kw)
+                    else:
+                        keywords_to_fetch.append(kw)
+
+        if keywords_to_fetch:
+            fetched_data = await _fetch_demand_data(keywords_to_fetch)
+            results.update(fetched_data)
+
+        distribution = _calculate_demand_distribution(results)
+
+        analysis_data = {
+            "keywords": keyword_list,
+            "total_demand": distribution["total_volume"],
+            "platforms": distribution["platforms"],
+            "distribution_summary": distribution["summary"],
+            "insights": distribution["insights"],
+            "recommendations": distribution["recommendations"],
+        }
+
+        # Generate PDF
+        try:
+            from src.services.export import generate_demand_report_pdf
+            pdf_bytes = generate_demand_report_pdf(analysis_data, title)
+        except ImportError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"PDF export requires reportlab library. Error: {str(e)}"
+            )
+
+        # Return as downloadable file
+        filename = f"demand_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pdf"
+
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(pdf_bytes)),
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"PDF export failed: {str(e)}")
+
+
+@app.get("/api/export/pptx")
+async def export_demand_pptx(
+    keywords: str = Query(..., description="Comma-separated keywords"),
+    title: str = Query(default="Demand Distribution Analysis", description="Report title"),
+    refresh: bool = Query(default=False, description="Force refresh data"),
+):
+    """
+    Export demand analysis as a PowerPoint presentation.
+
+    Generates a professional PPTX with:
+    - Title slide
+    - Executive summary with key metrics
+    - Platform breakdown table
+    - Key insights
+    - Recommendations
+    """
+    from fastapi.responses import StreamingResponse
+
+    keyword_list = [k.strip() for k in keywords.split(",") if k.strip()]
+
+    if len(keyword_list) > 20:
+        raise HTTPException(status_code=400, detail="Maximum 20 keywords")
+
+    try:
+        # Get analysis data (same as PDF)
+        from src.db.models import Keyword, KeywordMetric
+        from sqlalchemy import select
+        from datetime import timedelta
+
+        results = {}
+        keywords_to_fetch = []
+
+        if repo:
+            with repo.get_session() as session:
+                for kw in keyword_list:
+                    stmt = select(Keyword).where(Keyword.keyword == kw)
+                    existing = session.execute(stmt).scalar_one_or_none()
+
+                    if existing and not refresh:
+                        metrics_stmt = (
+                            select(KeywordMetric)
+                            .where(KeywordMetric.keyword_id == existing.id)
+                            .order_by(KeywordMetric.collected_at.desc())
+                        )
+                        metrics = session.execute(metrics_stmt).scalars().all()
+                        recent_cutoff = datetime.utcnow() - timedelta(hours=24)
+                        recent_metrics = [m for m in metrics if m.collected_at > recent_cutoff]
+
+                        if recent_metrics:
+                            results[kw] = _aggregate_keyword_metrics(recent_metrics)
+                        else:
+                            keywords_to_fetch.append(kw)
+                    else:
+                        keywords_to_fetch.append(kw)
+
+        if keywords_to_fetch:
+            fetched_data = await _fetch_demand_data(keywords_to_fetch)
+            results.update(fetched_data)
+
+        distribution = _calculate_demand_distribution(results)
+
+        analysis_data = {
+            "keywords": keyword_list,
+            "total_demand": distribution["total_volume"],
+            "platforms": distribution["platforms"],
+            "distribution_summary": distribution["summary"],
+            "insights": distribution["insights"],
+            "recommendations": distribution["recommendations"],
+        }
+
+        # Generate PPTX
+        try:
+            from src.services.export import generate_demand_report_pptx
+            pptx_bytes = generate_demand_report_pptx(analysis_data, title)
+        except ImportError as e:
+            raise HTTPException(
+                status_code=500,
+                detail=f"PowerPoint export requires python-pptx library. Error: {str(e)}"
+            )
+
+        filename = f"demand_report_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}.pptx"
+
+        return StreamingResponse(
+            io.BytesIO(pptx_bytes),
+            media_type="application/vnd.openxmlformats-officedocument.presentationml.presentation",
+            headers={
+                "Content-Disposition": f'attachment; filename="{filename}"',
+                "Content-Length": str(len(pptx_bytes)),
+            }
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PowerPoint export failed: {str(e)}")
+
+
+@app.get("/api/export/comparison/pdf")
+async def export_comparison_pdf(
+    brand_keywords: str = Query(..., description="Your brand keywords"),
+    competitor_keywords: str = Query(..., description="Competitor keywords"),
+    brand_name: str = Query(default="Your Brand", description="Brand name for report"),
+    competitor_name: str = Query(default="Competitor", description="Competitor name for report"),
+):
+    """
+    Export competitor comparison as a PDF report.
+
+    Includes share of voice analysis across platforms.
+    """
+    from fastapi.responses import StreamingResponse
+
+    brand_kws = [k.strip() for k in brand_keywords.split(",") if k.strip()]
+    competitor_kws = [k.strip() for k in competitor_keywords.split(",") if k.strip()]
+
+    if len(brand_kws) + len(competitor_kws) > 30:
+        raise HTTPException(status_code=400, detail="Maximum 30 total keywords")
+
+    try:
+        brand_data = await _fetch_demand_data(brand_kws)
+        competitor_data = await _fetch_demand_data(competitor_kws)
+
+        brand_distribution = _calculate_demand_distribution(brand_data)
+        competitor_distribution = _calculate_demand_distribution(competitor_data)
+
+        share_of_voice = _calculate_share_of_voice(brand_distribution, competitor_distribution)
+
+        # Build comparison analysis data
+        analysis_data = {
+            "keywords": brand_kws + competitor_kws,
+            "total_demand": brand_distribution["total_volume"] + competitor_distribution["total_volume"],
+            "platforms": brand_distribution["platforms"],
+            "distribution_summary": {
+                **brand_distribution["summary"],
+                "comparison_type": "share_of_voice",
+                "brand_share": share_of_voice["overall"].get("brand", 0),
+                "competitor_share": share_of_voice["overall"].get("competitor", 0),
+            },
+            "insights": _generate_competitive_insights(brand_distribution, competitor_distribution),
+            "recommendations": brand_distribution.get("recommendations", []),
+        }
+
+        try:
+            from src.services.export import generate_demand_report_pdf
+            pdf_bytes = generate_demand_report_pdf(
+                analysis_data,
+                title=f"{brand_name} vs {competitor_name} - Competitive Analysis"
+            )
+        except ImportError as e:
+            raise HTTPException(status_code=500, detail=f"PDF export requires reportlab. Error: {str(e)}")
+
+        filename = f"comparison_{brand_name}_{datetime.utcnow().strftime('%Y%m%d')}.pdf"
+
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{filename}"'}
+        )
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Comparison export failed: {str(e)}")
 
 
 # Vercel serverless handler

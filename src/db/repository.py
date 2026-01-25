@@ -403,3 +403,187 @@ class KeywordRepository:
                 "total_metrics": metric_count,
                 "metrics_by_platform": {p: c for p, c in platform_counts},
             }
+
+    def get_keyword_history(
+        self,
+        keyword: str,
+        days: int = 90,
+    ) -> dict[str, Any]:
+        """
+        Get historical data for a keyword across all platforms.
+
+        Args:
+            keyword: Keyword to get history for
+            days: Number of days of history to retrieve
+
+        Returns:
+            Dictionary with historical data by platform and date
+        """
+        from datetime import timedelta
+
+        with self.get_session() as session:
+            stmt = select(Keyword).where(Keyword.keyword == keyword)
+            kw = session.execute(stmt).scalar_one_or_none()
+
+            if not kw:
+                return {"keyword": keyword, "history": {}, "error": "Keyword not found"}
+
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+            # Get all metrics since cutoff
+            metrics_stmt = (
+                select(KeywordMetric)
+                .where(KeywordMetric.keyword_id == kw.id)
+                .where(KeywordMetric.collected_at >= cutoff_date)
+                .order_by(KeywordMetric.collected_at)
+            )
+            metrics = session.execute(metrics_stmt).scalars().all()
+
+            # Organize by platform and date
+            history: dict[str, list[dict]] = {}
+            for metric in metrics:
+                platform = metric.platform
+                if platform not in history:
+                    history[platform] = []
+
+                history[platform].append({
+                    "date": metric.collected_date,
+                    "volume": metric.search_volume or metric.proxy_score or 0,
+                    "trend": metric.trend,
+                    "trend_velocity": metric.trend_velocity,
+                })
+
+            # Get unified score history
+            unified_stmt = (
+                select(UnifiedScore)
+                .where(UnifiedScore.keyword_id == kw.id)
+                .where(UnifiedScore.collected_at >= cutoff_date)
+                .order_by(UnifiedScore.collected_at)
+            )
+            unified_scores = session.execute(unified_stmt).scalars().all()
+
+            unified_history = [
+                {
+                    "date": us.collected_date,
+                    "score": us.unified_demand_score,
+                    "trend": us.cross_platform_trend,
+                    "best_platform": us.best_platform,
+                }
+                for us in unified_scores
+            ]
+
+            return {
+                "keyword": keyword,
+                "history": history,
+                "unified_history": unified_history,
+                "days": days,
+            }
+
+    def get_trending_keywords(
+        self,
+        platform: str | None = None,
+        limit: int = 20,
+    ) -> list[dict]:
+        """
+        Get keywords with the highest growth trends.
+
+        Args:
+            platform: Optional platform filter
+            limit: Maximum results
+
+        Returns:
+            List of trending keywords with metrics
+        """
+        with self.get_session() as session:
+            from sqlalchemy import desc
+
+            # Get keywords with growing trends
+            stmt = (
+                select(KeywordMetric, Keyword.keyword)
+                .join(Keyword, KeywordMetric.keyword_id == Keyword.id)
+                .where(KeywordMetric.trend == "growing")
+            )
+
+            if platform:
+                stmt = stmt.where(KeywordMetric.platform == platform)
+
+            stmt = stmt.order_by(desc(KeywordMetric.trend_velocity)).limit(limit)
+
+            results = session.execute(stmt).all()
+
+            return [
+                {
+                    "keyword": keyword,
+                    "platform": metric.platform,
+                    "volume": metric.search_volume or metric.proxy_score or 0,
+                    "trend_velocity": metric.trend_velocity,
+                    "collected_at": metric.collected_at.isoformat() if metric.collected_at else None,
+                }
+                for metric, keyword in results
+            ]
+
+    def get_demand_over_time(
+        self,
+        keywords: list[str],
+        days: int = 30,
+    ) -> dict[str, Any]:
+        """
+        Get aggregated demand over time for a set of keywords.
+
+        Useful for tracking brand or category demand trends.
+
+        Args:
+            keywords: Keywords to aggregate
+            days: Number of days of history
+
+        Returns:
+            Time series of total demand by platform
+        """
+        from collections import defaultdict
+        from datetime import timedelta
+
+        with self.get_session() as session:
+            cutoff_date = datetime.utcnow() - timedelta(days=days)
+
+            # Get keyword IDs
+            keyword_ids = []
+            for kw in keywords:
+                stmt = select(Keyword.id).where(Keyword.keyword == kw)
+                kw_id = session.execute(stmt).scalar_one_or_none()
+                if kw_id:
+                    keyword_ids.append(kw_id)
+
+            if not keyword_ids:
+                return {"keywords": keywords, "time_series": {}, "error": "No keywords found"}
+
+            # Get metrics for all keywords
+            from sqlalchemy import or_
+            metrics_stmt = (
+                select(KeywordMetric)
+                .where(KeywordMetric.keyword_id.in_(keyword_ids))
+                .where(KeywordMetric.collected_at >= cutoff_date)
+                .order_by(KeywordMetric.collected_date)
+            )
+            metrics = session.execute(metrics_stmt).scalars().all()
+
+            # Aggregate by date and platform
+            time_series: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+
+            for metric in metrics:
+                date = metric.collected_date
+                platform = metric.platform
+                volume = metric.search_volume or metric.proxy_score or 0
+                time_series[date][platform] += volume
+
+            # Convert to sorted list
+            sorted_series = []
+            for date in sorted(time_series.keys()):
+                entry = {"date": date, "platforms": dict(time_series[date])}
+                entry["total"] = sum(time_series[date].values())
+                sorted_series.append(entry)
+
+            return {
+                "keywords": keywords,
+                "time_series": sorted_series,
+                "days": days,
+            }

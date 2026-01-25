@@ -1,0 +1,452 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Competitor Comparison - Total Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen" x-data="compareDashboard()">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-balance-scale text-2xl text-purple-500"></i>
+                    <div>
+                        <h1 class="text-xl font-bold">Total Search</h1>
+                        <span class="text-xs text-gray-400">Competitor Comparison</span>
+                    </div>
+                </div>
+                <nav class="flex items-center space-x-4">
+                    <a href="/home" class="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition">
+                        <i class="fas fa-search mr-1"></i> Keywords
+                    </a>
+                    <a href="/demand" class="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition">
+                        <i class="fas fa-chart-pie mr-1"></i> Demand
+                    </a>
+                    <a href="/compare" class="px-3 py-2 rounded-lg bg-purple-600 text-white text-sm font-medium">
+                        <i class="fas fa-balance-scale mr-1"></i> Compare
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Comparison Input -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
+            <h2 class="text-lg font-semibold mb-4">
+                <i class="fas fa-balance-scale text-purple-500 mr-2"></i>
+                Compare Share of Voice
+            </h2>
+            <p class="text-gray-400 text-sm mb-6">
+                Compare your brand's search demand against competitors across all platforms.
+            </p>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Your Brand -->
+                <div>
+                    <label class="block text-sm font-medium text-blue-400 mb-2">
+                        <i class="fas fa-building mr-1"></i> Your Brand Keywords
+                    </label>
+                    <textarea
+                        x-model="brandKeywords"
+                        placeholder="Enter your brand keywords (one per line or comma-separated)&#10;e.g., nike, nike running shoes, nike air max"
+                        rows="4"
+                        class="w-full px-4 py-3 bg-gray-700 border border-blue-500/50 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    ></textarea>
+                </div>
+
+                <!-- Competitor -->
+                <div>
+                    <label class="block text-sm font-medium text-red-400 mb-2">
+                        <i class="fas fa-users mr-1"></i> Competitor Keywords
+                    </label>
+                    <textarea
+                        x-model="competitorKeywords"
+                        placeholder="Enter competitor keywords (one per line or comma-separated)&#10;e.g., adidas, adidas running shoes, adidas ultraboost"
+                        rows="4"
+                        class="w-full px-4 py-3 bg-gray-700 border border-red-500/50 rounded-lg focus:ring-2 focus:ring-red-500 focus:border-transparent"
+                    ></textarea>
+                </div>
+            </div>
+
+            <div class="mt-6 flex justify-center">
+                <button
+                    @click="compareKeywords()"
+                    :disabled="isLoading || !brandKeywords.trim() || !competitorKeywords.trim()"
+                    class="px-8 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-gray-600 rounded-lg font-semibold transition flex items-center space-x-2"
+                >
+                    <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-balance-scale'"></i>
+                    <span x-text="isLoading ? 'Comparing...' : 'Compare Share of Voice'"></span>
+                </button>
+            </div>
+
+            <!-- Quick Examples -->
+            <div class="mt-4 text-center">
+                <span class="text-xs text-gray-500">Try:</span>
+                <button @click="loadExample('cosmetics')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition ml-2">Lavera vs Weleda</button>
+                <button @click="loadExample('sports')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition ml-2">Nike vs Adidas</button>
+                <button @click="loadExample('tech')" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition ml-2">iPhone vs Samsung</button>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div x-show="hasResults" x-cloak>
+            <!-- Overall Share of Voice -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
+                <h3 class="text-lg font-semibold mb-6">
+                    <i class="fas fa-trophy text-yellow-500 mr-2"></i>
+                    Overall Share of Voice
+                </h3>
+
+                <div class="flex items-center justify-center mb-6">
+                    <div class="w-full max-w-2xl">
+                        <!-- Share bar -->
+                        <div class="flex h-12 rounded-lg overflow-hidden">
+                            <div
+                                class="bg-blue-500 flex items-center justify-center transition-all duration-700"
+                                :style="'width: ' + (results?.share_of_voice?.overall?.brand || 50) + '%'"
+                            >
+                                <span class="font-bold text-lg" x-text="results?.share_of_voice?.overall?.brand + '%'"></span>
+                            </div>
+                            <div
+                                class="bg-red-500 flex items-center justify-center transition-all duration-700"
+                                :style="'width: ' + (results?.share_of_voice?.overall?.competitor || 50) + '%'"
+                            >
+                                <span class="font-bold text-lg" x-text="results?.share_of_voice?.overall?.competitor + '%'"></span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between mt-2 text-sm">
+                            <span class="text-blue-400">
+                                <i class="fas fa-building mr-1"></i> Your Brand
+                            </span>
+                            <span class="text-red-400">
+                                Competitor <i class="fas fa-users ml-1"></i>
+                            </span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Total volumes -->
+                <div class="grid grid-cols-2 gap-8 mt-8">
+                    <div class="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
+                        <p class="text-sm text-blue-400 mb-1">Your Brand Total Demand</p>
+                        <p class="text-3xl font-bold" x-text="formatNumber(results?.brand?.total_demand || 0)"></p>
+                        <p class="text-xs text-gray-400 mt-1">monthly searches</p>
+                    </div>
+                    <div class="text-center p-4 bg-red-500/10 rounded-lg border border-red-500/30">
+                        <p class="text-sm text-red-400 mb-1">Competitor Total Demand</p>
+                        <p class="text-3xl font-bold" x-text="formatNumber(results?.competitor?.total_demand || 0)"></p>
+                        <p class="text-xs text-gray-400 mt-1">monthly searches</p>
+                    </div>
+                </div>
+
+                <!-- Export Buttons -->
+                <div class="flex justify-center gap-4 mt-8">
+                    <button
+                        @click="exportComparisonPDF()"
+                        class="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition flex items-center gap-2"
+                    >
+                        <i class="fas fa-file-pdf text-red-400"></i>
+                        Export PDF Report
+                    </button>
+                    <button
+                        @click="copyComparisonSummary()"
+                        class="px-6 py-3 bg-gray-700 hover:bg-gray-600 rounded-lg font-medium transition flex items-center gap-2"
+                    >
+                        <i class="fas fa-copy"></i>
+                        Copy Summary
+                    </button>
+                </div>
+            </div>
+
+            <!-- Platform-by-Platform Comparison -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
+                <h3 class="text-lg font-semibold mb-6">
+                    <i class="fas fa-chart-bar text-green-500 mr-2"></i>
+                    Share of Voice by Platform
+                </h3>
+
+                <div class="space-y-6">
+                    <template x-for="platform in platforms" :key="platform.id">
+                        <div class="bg-gray-700/30 rounded-lg p-4">
+                            <div class="flex items-center justify-between mb-3">
+                                <div class="flex items-center space-x-2">
+                                    <i :class="platform.icon + ' text-xl'" :style="'color: ' + platform.color"></i>
+                                    <span class="font-medium" x-text="platform.name"></span>
+                                </div>
+                                <div class="text-sm text-gray-400">
+                                    <span class="text-blue-400" x-text="formatNumber(getPlatformSOV(platform.id)?.brand_volume || 0)"></span>
+                                    vs
+                                    <span class="text-red-400" x-text="formatNumber(getPlatformSOV(platform.id)?.competitor_volume || 0)"></span>
+                                </div>
+                            </div>
+
+                            <!-- Platform share bar -->
+                            <div class="flex h-8 rounded overflow-hidden">
+                                <div
+                                    class="bg-blue-500 flex items-center justify-center text-xs font-medium transition-all duration-500"
+                                    :style="'width: ' + (getPlatformSOV(platform.id)?.brand || 50) + '%'"
+                                >
+                                    <span x-show="getPlatformSOV(platform.id)?.brand > 15" x-text="getPlatformSOV(platform.id)?.brand + '%'"></span>
+                                </div>
+                                <div
+                                    class="bg-red-500 flex items-center justify-center text-xs font-medium transition-all duration-500"
+                                    :style="'width: ' + (getPlatformSOV(platform.id)?.competitor || 50) + '%'"
+                                >
+                                    <span x-show="getPlatformSOV(platform.id)?.competitor > 15" x-text="getPlatformSOV(platform.id)?.competitor + '%'"></span>
+                                </div>
+                            </div>
+
+                            <!-- Winner badge -->
+                            <div class="mt-2 text-xs">
+                                <template x-if="getPlatformSOV(platform.id)?.brand > getPlatformSOV(platform.id)?.competitor">
+                                    <span class="text-blue-400"><i class="fas fa-crown mr-1"></i> You lead on this platform</span>
+                                </template>
+                                <template x-if="getPlatformSOV(platform.id)?.competitor > getPlatformSOV(platform.id)?.brand">
+                                    <span class="text-red-400"><i class="fas fa-exclamation-triangle mr-1"></i> Competitor leads here</span>
+                                </template>
+                                <template x-if="getPlatformSOV(platform.id)?.brand === getPlatformSOV(platform.id)?.competitor">
+                                    <span class="text-gray-400"><i class="fas fa-equals mr-1"></i> Even competition</span>
+                                </template>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Competitive Insights -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                    Competitive Insights
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <template x-for="insight in results?.insights || []" :key="insight.title">
+                        <div
+                            class="p-4 rounded-lg border"
+                            :class="{
+                                'bg-green-500/10 border-green-500/30': insight.type === 'strength',
+                                'bg-red-500/10 border-red-500/30': insight.type === 'gap'
+                            }"
+                        >
+                            <div class="flex items-start space-x-3">
+                                <i
+                                    class="mt-1"
+                                    :class="{
+                                        'fas fa-check-circle text-green-500': insight.type === 'strength',
+                                        'fas fa-exclamation-circle text-red-500': insight.type === 'gap'
+                                    }"
+                                ></i>
+                                <div>
+                                    <p class="font-medium" x-text="insight.title"></p>
+                                    <p class="text-sm text-gray-400 mt-1" x-text="insight.description"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </template>
+                </div>
+            </div>
+
+            <!-- Export -->
+            <div class="flex justify-end space-x-4">
+                <button
+                    @click="exportComparison()"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition flex items-center space-x-2"
+                >
+                    <i class="fas fa-file-csv"></i>
+                    <span>Export Report</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!hasResults && !isLoading" class="text-center py-20">
+            <div class="inline-block p-8 bg-gray-800 rounded-xl border border-gray-700 mb-6">
+                <i class="fas fa-balance-scale text-6xl text-gray-600"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">Compare Your Brand vs Competitors</h2>
+            <p class="text-gray-400 max-w-md mx-auto">
+                Enter your brand keywords and competitor keywords above to see share of voice across all platforms.
+            </p>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="isLoading" class="text-center py-20">
+            <div class="inline-block p-8 bg-gray-800 rounded-xl border border-gray-700 mb-6">
+                <i class="fas fa-spinner fa-spin text-6xl text-purple-500"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">Analyzing Competition...</h2>
+            <p class="text-gray-400">Fetching data from 6 platforms. This may take 30-60 seconds.</p>
+        </div>
+    </main>
+
+    <script>
+        function compareDashboard() {
+            return {
+                brandKeywords: '',
+                competitorKeywords: '',
+                isLoading: false,
+                results: null,
+
+                platforms: [
+                    { id: 'google', name: 'Google', icon: 'fab fa-google', color: '#4285F4' },
+                    { id: 'youtube', name: 'YouTube', icon: 'fab fa-youtube', color: '#FF0000' },
+                    { id: 'amazon', name: 'Amazon', icon: 'fab fa-amazon', color: '#FF9900' },
+                    { id: 'tiktok', name: 'TikTok', icon: 'fab fa-tiktok', color: '#000000' },
+                    { id: 'instagram', name: 'Instagram', icon: 'fab fa-instagram', color: '#E1306C' },
+                    { id: 'pinterest', name: 'Pinterest', icon: 'fab fa-pinterest', color: '#E60023' },
+                ],
+
+                get hasResults() {
+                    return this.results !== null;
+                },
+
+                loadExample(type) {
+                    const examples = {
+                        cosmetics: {
+                            brand: 'lavera, lavera naturkosmetik, lavera mascara',
+                            competitor: 'weleda, weleda skin food, weleda naturkosmetik'
+                        },
+                        sports: {
+                            brand: 'nike, nike running shoes, nike air max',
+                            competitor: 'adidas, adidas running shoes, adidas ultraboost'
+                        },
+                        tech: {
+                            brand: 'iphone, iphone 15, apple iphone',
+                            competitor: 'samsung galaxy, samsung phone, galaxy s24'
+                        }
+                    };
+                    const ex = examples[type];
+                    if (ex) {
+                        this.brandKeywords = ex.brand;
+                        this.competitorKeywords = ex.competitor;
+                    }
+                },
+
+                async compareKeywords() {
+                    if (!this.brandKeywords.trim() || !this.competitorKeywords.trim()) return;
+
+                    this.isLoading = true;
+                    this.results = null;
+
+                    // Parse keywords (handle both comma and newline separated)
+                    const parseKeywords = (str) => str.split(/[,\n]/).map(k => k.trim()).filter(k => k).join(',');
+                    const brandKws = parseKeywords(this.brandKeywords);
+                    const compKws = parseKeywords(this.competitorKeywords);
+
+                    try {
+                        const response = await fetch(`/api/demand/compare?brand_keywords=${encodeURIComponent(brandKws)}&competitor_keywords=${encodeURIComponent(compKws)}`);
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.results = data;
+                        } else {
+                            alert('Error: ' + (data.detail || 'Comparison failed'));
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('Failed to compare keywords. Please try again.');
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                getPlatformSOV(platformId) {
+                    return this.results?.share_of_voice?.by_platform?.[platformId] || { brand: 50, competitor: 50 };
+                },
+
+                formatNumber(num) {
+                    if (num >= 1000000) {
+                        return (num / 1000000).toFixed(1) + 'M';
+                    } else if (num >= 1000) {
+                        return (num / 1000).toFixed(1) + 'K';
+                    }
+                    return num?.toLocaleString() || '0';
+                },
+
+                exportComparison() {
+                    if (!this.results) return;
+
+                    const lines = [
+                        'Competitive Share of Voice Report',
+                        '================================',
+                        '',
+                        'Overall Share of Voice:',
+                        `  Your Brand: ${this.results.share_of_voice.overall.brand}%`,
+                        `  Competitor: ${this.results.share_of_voice.overall.competitor}%`,
+                        '',
+                        'Total Demand:',
+                        `  Your Brand: ${this.formatNumber(this.results.brand.total_demand)}`,
+                        `  Competitor: ${this.formatNumber(this.results.competitor.total_demand)}`,
+                        '',
+                        'By Platform:',
+                    ];
+
+                    for (const platform of this.platforms) {
+                        const sov = this.getPlatformSOV(platform.id);
+                        lines.push(`  ${platform.name}: You ${sov.brand}% vs Competitor ${sov.competitor}%`);
+                    }
+
+                    const text = lines.join('\n');
+                    const blob = new Blob([text], { type: 'text/plain' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'competitive_analysis.txt';
+                    a.click();
+                },
+
+                exportComparisonPDF() {
+                    if (!this.brandKeywords.trim() || !this.competitorKeywords.trim()) return;
+
+                    const parseKeywords = (str) => str.split(/[,\n]/).map(k => k.trim()).filter(k => k).join(',');
+                    const brandKws = encodeURIComponent(parseKeywords(this.brandKeywords));
+                    const compKws = encodeURIComponent(parseKeywords(this.competitorKeywords));
+
+                    window.open(`/api/export/comparison/pdf?brand_keywords=${brandKws}&competitor_keywords=${compKws}&brand_name=Your%20Brand&competitor_name=Competitor`, '_blank');
+                },
+
+                copyComparisonSummary() {
+                    if (!this.results) return;
+
+                    const lines = [
+                        'Competitive Share of Voice Report',
+                        '================================',
+                        '',
+                        'Overall Share of Voice:',
+                        `  Your Brand: ${this.results.share_of_voice.overall.brand}%`,
+                        `  Competitor: ${this.results.share_of_voice.overall.competitor}%`,
+                        '',
+                        'Total Demand:',
+                        `  Your Brand: ${this.formatNumber(this.results.brand.total_demand)}`,
+                        `  Competitor: ${this.formatNumber(this.results.competitor.total_demand)}`,
+                        '',
+                        'By Platform:',
+                    ];
+
+                    for (const platform of this.platforms) {
+                        const sov = this.getPlatformSOV(platform.id);
+                        lines.push(`  ${platform.name}: You ${sov.brand}% vs Competitor ${sov.competitor}%`);
+                    }
+
+                    lines.push('');
+                    lines.push('Generated by Total Search - Cross-Platform Demand Intelligence');
+
+                    navigator.clipboard.writeText(lines.join('\n')).then(() => {
+                        alert('Summary copied to clipboard!');
+                    });
+                }
+            };
+        }
+    </script>
+</body>
+</html>

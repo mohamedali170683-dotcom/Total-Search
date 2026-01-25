@@ -16,6 +16,7 @@ from src.clients.base import batch_items
 from src.clients.dataforseo import DataForSEOClient
 from src.clients.google_trends import GoogleTrendsClient
 from src.clients.junglescout import JungleScoutClient
+from src.clients.pinterest import PinterestClient
 from src.config import Settings, get_settings
 from src.models.keyword import Platform, UnifiedKeywordData
 
@@ -104,6 +105,7 @@ class KeywordPipeline:
         apify_client: ApifyClient | None = None,
         junglescout_client: JungleScoutClient | None = None,
         google_trends_client: GoogleTrendsClient | None = None,
+        pinterest_client: PinterestClient | None = None,
     ):
         self.settings = settings or get_settings()
 
@@ -112,6 +114,7 @@ class KeywordPipeline:
         self.apify = apify_client or ApifyClient(settings=self.settings)
         self.junglescout = junglescout_client or JungleScoutClient(settings=self.settings)
         self.google_trends = google_trends_client or GoogleTrendsClient(settings=self.settings)
+        self.pinterest = pinterest_client or PinterestClient(settings=self.settings)
 
         # Initialize calculators
         self.tiktok_calculator = TikTokProxyCalculator()
@@ -252,6 +255,9 @@ class KeywordPipeline:
         if Platform.INSTAGRAM in options.platforms:
             tasks.append(self._fetch_instagram_data(keywords, keyword_data, options))
 
+        if Platform.PINTEREST in options.platforms:
+            tasks.append(self._fetch_pinterest_data(keywords, keyword_data))
+
         await asyncio.gather(*tasks, return_exceptions=True)
 
     async def _fetch_all_platforms_sequential(
@@ -275,6 +281,9 @@ class KeywordPipeline:
 
         if Platform.INSTAGRAM in options.platforms:
             await self._fetch_instagram_data(keywords, keyword_data, options)
+
+        if Platform.PINTEREST in options.platforms:
+            await self._fetch_pinterest_data(keywords, keyword_data)
 
     async def _fetch_google_data(
         self,
@@ -387,6 +396,25 @@ class KeywordPipeline:
                 keyword_data[kw].processing_errors = keyword_data[kw].processing_errors or []
                 keyword_data[kw].processing_errors.append(f"Instagram: {e}")
 
+    async def _fetch_pinterest_data(
+        self,
+        keywords: list[str],
+        keyword_data: dict[str, UnifiedKeywordData],
+    ) -> None:
+        """Fetch Pinterest search/interest data."""
+        try:
+            logger.debug(f"Fetching Pinterest data for {len(keywords)} keywords")
+            metrics = await self.pinterest.get_pinterest_search_volume(keywords)
+
+            for kw, metric in zip(keywords, metrics):
+                keyword_data[kw].pinterest = metric
+
+        except Exception as e:
+            logger.error(f"Failed to fetch Pinterest data: {e}")
+            for kw in keywords:
+                keyword_data[kw].processing_errors = keyword_data[kw].processing_errors or []
+                keyword_data[kw].processing_errors.append(f"Pinterest: {e}")
+
     def _save_checkpoint(self, results: list[UnifiedKeywordData]) -> None:
         """Save current progress to checkpoint file."""
         if not self._checkpoint_file:
@@ -430,6 +458,7 @@ class KeywordPipeline:
             self.apify.close(),
             self.junglescout.close(),
             self.google_trends.close(),
+            self.pinterest.close(),
             return_exceptions=True,
         )
 

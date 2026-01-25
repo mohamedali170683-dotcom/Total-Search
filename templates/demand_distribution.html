@@ -1,0 +1,532 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Demand Distribution - Total Search</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        [x-cloak] { display: none !important; }
+        .gradient-bg {
+            background: linear-gradient(135deg, #1e3a8a 0%, #7c3aed 100%);
+        }
+        .platform-bar {
+            transition: width 0.8s ease-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen" x-data="demandDashboard()">
+    <!-- Header -->
+    <header class="bg-gray-800 border-b border-gray-700 sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center space-x-3">
+                    <i class="fas fa-chart-pie text-2xl text-blue-500"></i>
+                    <div>
+                        <h1 class="text-xl font-bold">Total Search</h1>
+                        <span class="text-xs text-gray-400">Demand Distribution Analysis</span>
+                    </div>
+                </div>
+                <nav class="flex items-center space-x-4">
+                    <a href="/home" class="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition">
+                        <i class="fas fa-search mr-1"></i> Keywords
+                    </a>
+                    <a href="/demand" class="px-3 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium">
+                        <i class="fas fa-chart-pie mr-1"></i> Demand
+                    </a>
+                    <a href="/brand" class="px-3 py-2 rounded-lg bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium transition">
+                        <i class="fas fa-building mr-1"></i> Brands
+                    </a>
+                </nav>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 py-8">
+        <!-- Search Section -->
+        <div class="bg-gray-800 rounded-xl p-6 border border-gray-700 mb-8">
+            <h2 class="text-lg font-semibold mb-4">
+                <i class="fas fa-search text-blue-500 mr-2"></i>
+                Analyze Demand Distribution
+            </h2>
+            <p class="text-gray-400 text-sm mb-4">
+                Enter keywords to see where demand exists across Google, YouTube, Amazon, TikTok, Instagram, and Pinterest.
+            </p>
+
+            <div class="flex flex-col md:flex-row gap-4">
+                <div class="flex-1">
+                    <input
+                        type="text"
+                        x-model="searchQuery"
+                        @keyup.enter="analyzeKeywords()"
+                        placeholder="Enter keywords (comma-separated), e.g., nike running shoes, adidas sneakers"
+                        class="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    >
+                </div>
+                <button
+                    @click="analyzeKeywords()"
+                    :disabled="isLoading || !searchQuery.trim()"
+                    class="px-6 py-3 bg-blue-600 hover:bg-blue-700 disabled:bg-gray-600 rounded-lg font-semibold transition flex items-center justify-center space-x-2"
+                >
+                    <i :class="isLoading ? 'fas fa-spinner fa-spin' : 'fas fa-chart-bar'"></i>
+                    <span x-text="isLoading ? 'Analyzing...' : 'Analyze Demand'"></span>
+                </button>
+            </div>
+
+            <!-- Quick Examples -->
+            <div class="mt-4 flex flex-wrap gap-2">
+                <span class="text-xs text-gray-500">Try:</span>
+                <button @click="searchQuery = 'lavera, weleda, naturkosmetik'; analyzeKeywords()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Cosmetics brands</button>
+                <button @click="searchQuery = 'running shoes, marathon training'; analyzeKeywords()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Running</button>
+                <button @click="searchQuery = 'meal prep, healthy recipes'; analyzeKeywords()" class="text-xs bg-gray-700 hover:bg-gray-600 px-2 py-1 rounded transition">Food</button>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div x-show="hasResults" x-cloak>
+            <!-- Total Demand Card -->
+            <div class="gradient-bg rounded-xl p-6 mb-8">
+                <div class="flex flex-col md:flex-row md:items-center md:justify-between">
+                    <div>
+                        <p class="text-blue-200 text-sm uppercase tracking-wide">Total Addressable Demand</p>
+                        <p class="text-4xl font-bold mt-1" x-text="formatNumber(results?.total_demand || 0)"></p>
+                        <p class="text-blue-200 text-sm mt-1">monthly searches across all platforms</p>
+                    </div>
+                    <div class="mt-4 md:mt-0 text-right">
+                        <div class="inline-flex items-center px-4 py-2 bg-white/10 rounded-lg">
+                            <i class="fab fa-google text-blue-300 mr-2"></i>
+                            <span class="text-sm">
+                                <span x-text="results?.distribution_summary?.google_share + '%'"></span> on Google
+                            </span>
+                        </div>
+                        <p class="text-blue-200 text-sm mt-2">
+                            <span class="text-white font-semibold" x-text="results?.distribution_summary?.non_google_share + '%'"></span>
+                            of demand is on other platforms
+                        </p>
+                        <!-- Export Buttons -->
+                        <div class="flex gap-2 mt-4">
+                            <button
+                                @click="exportPDF()"
+                                class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition flex items-center gap-2"
+                            >
+                                <i class="fas fa-file-pdf"></i>
+                                Export PDF
+                            </button>
+                            <button
+                                @click="exportPPTX()"
+                                class="px-4 py-2 bg-white/10 hover:bg-white/20 rounded-lg text-sm font-medium transition flex items-center gap-2"
+                            >
+                                <i class="fas fa-file-powerpoint"></i>
+                                Export PPTX
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Platform Distribution -->
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-8">
+                <!-- Distribution Chart -->
+                <div class="lg:col-span-2 bg-gray-800 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-semibold mb-4">
+                        <i class="fas fa-chart-pie text-purple-500 mr-2"></i>
+                        Platform Distribution
+                    </h3>
+                    <div class="flex flex-col lg:flex-row gap-6">
+                        <!-- Pie Chart -->
+                        <div class="w-full lg:w-1/2">
+                            <canvas id="distributionChart" width="300" height="300"></canvas>
+                        </div>
+                        <!-- Bar List -->
+                        <div class="w-full lg:w-1/2 space-y-3">
+                            <template x-for="platform in results?.platforms || []" :key="platform.platform">
+                                <div class="flex items-center">
+                                    <div class="w-8 text-center">
+                                        <i :class="platform.icon" :style="'color: ' + platform.color"></i>
+                                    </div>
+                                    <div class="flex-1 ml-3">
+                                        <div class="flex justify-between text-sm mb-1">
+                                            <span x-text="platform.display_name"></span>
+                                            <span class="text-gray-400">
+                                                <span x-text="formatNumber(platform.volume)"></span>
+                                                (<span x-text="platform.percentage + '%'"></span>)
+                                            </span>
+                                        </div>
+                                        <div class="h-2 bg-gray-700 rounded-full overflow-hidden">
+                                            <div
+                                                class="h-full rounded-full platform-bar"
+                                                :style="'width: ' + platform.percentage + '%; background-color: ' + platform.color"
+                                            ></div>
+                                        </div>
+                                    </div>
+                                    <div class="w-16 text-right ml-2">
+                                        <span
+                                            x-show="platform.trend === 'growing'"
+                                            class="text-green-500 text-xs"
+                                        ><i class="fas fa-arrow-up"></i></span>
+                                        <span
+                                            x-show="platform.trend === 'declining'"
+                                            class="text-red-500 text-xs"
+                                        ><i class="fas fa-arrow-down"></i></span>
+                                        <span
+                                            x-show="platform.trend === 'stable'"
+                                            class="text-gray-500 text-xs"
+                                        ><i class="fas fa-minus"></i></span>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Key Insight -->
+                <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-semibold mb-4">
+                        <i class="fas fa-lightbulb text-yellow-500 mr-2"></i>
+                        Key Insight
+                    </h3>
+
+                    <div class="text-center py-6">
+                        <p class="text-5xl font-bold text-blue-400" x-text="results?.distribution_summary?.non_google_share + '%'"></p>
+                        <p class="text-gray-400 mt-2">of demand exists<br>outside Google</p>
+                    </div>
+
+                    <div class="border-t border-gray-700 pt-4 mt-4">
+                        <p class="text-sm text-gray-400">
+                            If you're only running Google Ads, you're missing
+                            <span class="text-white font-semibold" x-text="formatNumber(Math.round(results?.total_demand * (results?.distribution_summary?.non_google_share / 100)))"></span>
+                            potential monthly searches.
+                        </p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Insights & Recommendations -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+                <!-- Insights -->
+                <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-semibold mb-4">
+                        <i class="fas fa-brain text-purple-500 mr-2"></i>
+                        Insights
+                    </h3>
+                    <div class="space-y-4">
+                        <template x-for="insight in results?.insights || []" :key="insight.title">
+                            <div
+                                class="p-4 rounded-lg border"
+                                :class="{
+                                    'bg-green-500/10 border-green-500/30': insight.type === 'opportunity',
+                                    'bg-blue-500/10 border-blue-500/30': insight.type === 'trend',
+                                    'bg-orange-500/10 border-orange-500/30': insight.type === 'ecommerce',
+                                    'bg-pink-500/10 border-pink-500/30': insight.type === 'social',
+                                    'bg-red-500/10 border-red-500/30': insight.type === 'visual'
+                                }"
+                            >
+                                <div class="flex items-start space-x-3">
+                                    <i
+                                        class="mt-1"
+                                        :class="{
+                                            'fas fa-rocket text-green-500': insight.type === 'opportunity',
+                                            'fas fa-chart-line text-blue-500': insight.type === 'trend',
+                                            'fas fa-shopping-cart text-orange-500': insight.type === 'ecommerce',
+                                            'fas fa-hashtag text-pink-500': insight.type === 'social',
+                                            'fas fa-image text-red-500': insight.type === 'visual'
+                                        }"
+                                    ></i>
+                                    <div>
+                                        <p class="font-medium" x-text="insight.title"></p>
+                                        <p class="text-sm text-gray-400 mt-1" x-text="insight.description"></p>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="!results?.insights?.length" class="text-gray-500 text-center py-4">
+                            No specific insights for this data set.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Recommendations -->
+                <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                    <h3 class="text-lg font-semibold mb-4">
+                        <i class="fas fa-tasks text-green-500 mr-2"></i>
+                        Recommendations
+                    </h3>
+                    <div class="space-y-4">
+                        <template x-for="(rec, index) in results?.recommendations || []" :key="rec.platform">
+                            <div class="p-4 bg-gray-700/50 rounded-lg">
+                                <div class="flex items-center space-x-2 mb-2">
+                                    <span class="w-6 h-6 bg-blue-600 rounded-full flex items-center justify-center text-xs font-bold" x-text="index + 1"></span>
+                                    <span class="font-medium" x-text="rec.action"></span>
+                                </div>
+                                <p class="text-sm text-gray-400 mb-3" x-text="rec.description"></p>
+                                <div class="flex flex-wrap gap-2">
+                                    <template x-for="tactic in rec.tactics" :key="tactic">
+                                        <span class="text-xs bg-gray-600 px-2 py-1 rounded" x-text="tactic"></span>
+                                    </template>
+                                </div>
+                            </div>
+                        </template>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Keyword Details Table -->
+            <div class="bg-gray-800 rounded-xl p-6 border border-gray-700">
+                <h3 class="text-lg font-semibold mb-4">
+                    <i class="fas fa-table text-blue-500 mr-2"></i>
+                    Keyword Details
+                </h3>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="text-left text-gray-400 border-b border-gray-700">
+                                <th class="pb-3 pr-4">Keyword</th>
+                                <th class="pb-3 px-4 text-right">Google</th>
+                                <th class="pb-3 px-4 text-right">YouTube</th>
+                                <th class="pb-3 px-4 text-right">Amazon</th>
+                                <th class="pb-3 px-4 text-right">TikTok</th>
+                                <th class="pb-3 px-4 text-right">Instagram</th>
+                                <th class="pb-3 px-4 text-right">Pinterest</th>
+                                <th class="pb-3 pl-4 text-center">Best Platform</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <template x-for="(data, keyword) in results?.keyword_details || {}" :key="keyword">
+                                <tr class="border-b border-gray-700/50 hover:bg-gray-700/30">
+                                    <td class="py-3 pr-4 font-medium" x-text="keyword"></td>
+                                    <td class="py-3 px-4 text-right" x-text="formatNumber(data.platforms?.google?.volume || 0)"></td>
+                                    <td class="py-3 px-4 text-right" x-text="formatNumber(data.platforms?.youtube?.volume || 0)"></td>
+                                    <td class="py-3 px-4 text-right" x-text="formatNumber(data.platforms?.amazon?.volume || 0)"></td>
+                                    <td class="py-3 px-4 text-right" x-text="formatNumber(data.platforms?.tiktok?.volume || 0)"></td>
+                                    <td class="py-3 px-4 text-right" x-text="formatNumber(data.platforms?.instagram?.volume || 0)"></td>
+                                    <td class="py-3 px-4 text-right" x-text="formatNumber(data.platforms?.pinterest?.volume || 0)"></td>
+                                    <td class="py-3 pl-4 text-center">
+                                        <span
+                                            class="px-2 py-1 rounded text-xs font-medium"
+                                            :class="{
+                                                'bg-blue-500/20 text-blue-400': data.best_platform === 'google',
+                                                'bg-red-500/20 text-red-400': data.best_platform === 'youtube',
+                                                'bg-orange-500/20 text-orange-400': data.best_platform === 'amazon',
+                                                'bg-gray-500/20 text-gray-400': data.best_platform === 'tiktok',
+                                                'bg-pink-500/20 text-pink-400': data.best_platform === 'instagram',
+                                                'bg-red-600/20 text-red-300': data.best_platform === 'pinterest'
+                                            }"
+                                            x-text="data.best_platform || '-'"
+                                        ></span>
+                                    </td>
+                                </tr>
+                            </template>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Export Section -->
+            <div class="mt-6 flex justify-end space-x-4">
+                <button
+                    @click="exportCSV()"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition flex items-center space-x-2"
+                >
+                    <i class="fas fa-file-csv"></i>
+                    <span>Export CSV</span>
+                </button>
+                <button
+                    @click="copyToClipboard()"
+                    class="px-4 py-2 bg-gray-700 hover:bg-gray-600 rounded-lg text-sm transition flex items-center space-x-2"
+                >
+                    <i class="fas fa-copy"></i>
+                    <span>Copy Summary</span>
+                </button>
+            </div>
+        </div>
+
+        <!-- Empty State -->
+        <div x-show="!hasResults && !isLoading" class="text-center py-20">
+            <div class="inline-block p-8 bg-gray-800 rounded-xl border border-gray-700 mb-6">
+                <i class="fas fa-chart-pie text-6xl text-gray-600"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">See Where Your Demand Lives</h2>
+            <p class="text-gray-400 max-w-md mx-auto">
+                Enter keywords above to analyze search demand across Google, YouTube, Amazon, TikTok, Instagram, and Pinterest.
+            </p>
+        </div>
+
+        <!-- Loading State -->
+        <div x-show="isLoading" class="text-center py-20">
+            <div class="inline-block p-8 bg-gray-800 rounded-xl border border-gray-700 mb-6">
+                <i class="fas fa-spinner fa-spin text-6xl text-blue-500"></i>
+            </div>
+            <h2 class="text-2xl font-bold mb-2">Analyzing Demand...</h2>
+            <p class="text-gray-400">Fetching data from 6 platforms. This may take 15-30 seconds.</p>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="border-t border-gray-800 mt-16 py-8">
+        <div class="max-w-7xl mx-auto px-4 text-center text-gray-500 text-sm">
+            <p>Total Search - Cross-Platform Demand Intelligence</p>
+            <p class="mt-1">Data sources: Google (DataForSEO), YouTube (Google Trends), Amazon (Jungle Scout), TikTok/Instagram (Apify), Pinterest (Trends API)</p>
+        </div>
+    </footer>
+
+    <script>
+        function demandDashboard() {
+            return {
+                searchQuery: '',
+                isLoading: false,
+                results: null,
+                chart: null,
+
+                get hasResults() {
+                    return this.results && this.results.total_demand > 0;
+                },
+
+                async analyzeKeywords() {
+                    if (!this.searchQuery.trim()) return;
+
+                    this.isLoading = true;
+                    this.results = null;
+
+                    try {
+                        const response = await fetch(`/api/demand/analyze?keywords=${encodeURIComponent(this.searchQuery)}`);
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.results = data;
+                            this.$nextTick(() => this.renderChart());
+                        } else {
+                            alert('Error: ' + (data.detail || 'Analysis failed'));
+                        }
+                    } catch (error) {
+                        console.error('Error:', error);
+                        alert('Failed to analyze keywords. Please try again.');
+                    } finally {
+                        this.isLoading = false;
+                    }
+                },
+
+                renderChart() {
+                    const ctx = document.getElementById('distributionChart');
+                    if (!ctx) return;
+
+                    if (this.chart) {
+                        this.chart.destroy();
+                    }
+
+                    const platforms = this.results?.platforms || [];
+
+                    this.chart = new Chart(ctx, {
+                        type: 'doughnut',
+                        data: {
+                            labels: platforms.map(p => p.display_name),
+                            datasets: [{
+                                data: platforms.map(p => p.volume),
+                                backgroundColor: platforms.map(p => p.color),
+                                borderWidth: 0,
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: true,
+                            plugins: {
+                                legend: {
+                                    display: false,
+                                },
+                                tooltip: {
+                                    callbacks: {
+                                        label: (context) => {
+                                            const value = context.raw;
+                                            const total = context.dataset.data.reduce((a, b) => a + b, 0);
+                                            const percentage = ((value / total) * 100).toFixed(1);
+                                            return `${context.label}: ${this.formatNumber(value)} (${percentage}%)`;
+                                        }
+                                    }
+                                }
+                            },
+                            cutout: '60%',
+                        }
+                    });
+                },
+
+                formatNumber(num) {
+                    if (num >= 1000000) {
+                        return (num / 1000000).toFixed(1) + 'M';
+                    } else if (num >= 1000) {
+                        return (num / 1000).toFixed(1) + 'K';
+                    }
+                    return num?.toLocaleString() || '0';
+                },
+
+                exportCSV() {
+                    if (!this.results) return;
+
+                    const headers = ['Keyword', 'Google', 'YouTube', 'Amazon', 'TikTok', 'Instagram', 'Pinterest', 'Best Platform'];
+                    const rows = [headers.join(',')];
+
+                    for (const [keyword, data] of Object.entries(this.results.keyword_details || {})) {
+                        const row = [
+                            `"${keyword}"`,
+                            data.platforms?.google?.volume || 0,
+                            data.platforms?.youtube?.volume || 0,
+                            data.platforms?.amazon?.volume || 0,
+                            data.platforms?.tiktok?.volume || 0,
+                            data.platforms?.instagram?.volume || 0,
+                            data.platforms?.pinterest?.volume || 0,
+                            data.best_platform || ''
+                        ];
+                        rows.push(row.join(','));
+                    }
+
+                    const csv = rows.join('\n');
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'demand_distribution.csv';
+                    a.click();
+                },
+
+                copyToClipboard() {
+                    if (!this.results) return;
+
+                    const summary = `
+Demand Distribution Analysis
+============================
+Total Demand: ${this.formatNumber(this.results.total_demand)} monthly searches
+
+Platform Breakdown:
+${this.results.platforms.map(p => `- ${p.display_name}: ${this.formatNumber(p.volume)} (${p.percentage}%)`).join('\n')}
+
+Key Insight: ${this.results.distribution_summary.non_google_share}% of demand is outside Google
+
+Generated by Total Search
+                    `.trim();
+
+                    navigator.clipboard.writeText(summary).then(() => {
+                        alert('Summary copied to clipboard!');
+                    });
+                },
+
+                exportPDF() {
+                    if (!this.searchQuery.trim()) return;
+
+                    const title = encodeURIComponent('Demand Distribution Analysis');
+                    const keywords = encodeURIComponent(this.searchQuery);
+                    window.open(`/api/export/pdf?keywords=${keywords}&title=${title}`, '_blank');
+                },
+
+                exportPPTX() {
+                    if (!this.searchQuery.trim()) return;
+
+                    const title = encodeURIComponent('Demand Distribution Analysis');
+                    const keywords = encodeURIComponent(this.searchQuery);
+                    window.open(`/api/export/pptx?keywords=${keywords}&title=${title}`, '_blank');
+                }
+            };
+        }
+    </script>
+</body>
+</html>

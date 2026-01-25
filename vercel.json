@@ -21,6 +21,14 @@
       "destination": "/api/main.py"
     },
     {
+      "source": "/demand",
+      "destination": "/api/main.py"
+    },
+    {
+      "source": "/compare",
+      "destination": "/api/main.py"
+    },
+    {
       "source": "/debug",
       "destination": "/api/main.py"
     },

@@ -5,6 +5,7 @@ from src.clients.base import BaseAPIClient, RateLimiter
 from src.clients.dataforseo import DataForSEOClient
 from src.clients.google_trends import GoogleTrendsClient
 from src.clients.junglescout import JungleScoutClient
+from src.clients.pinterest import PinterestClient
 
 __all__ = [
     "BaseAPIClient",
@@ -13,4 +14,5 @@ __all__ = [
     "ApifyClient",
     "JungleScoutClient",
     "GoogleTrendsClient",
+    "PinterestClient",
 ]

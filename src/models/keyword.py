@@ -39,6 +39,7 @@ class Platform(str, Enum):
     AMAZON = "amazon"
     TIKTOK = "tiktok"
     INSTAGRAM = "instagram"
+    PINTEREST = "pinterest"
 
 
 class PlatformMetrics(BaseModel):
@@ -172,6 +173,28 @@ class InstagramMetrics(PlatformMetrics):
     )
 
 
+class PinterestMetrics(PlatformMetrics):
+    """Pinterest-specific metrics from Pinterest Trends."""
+
+    source: str = "pinterest_trends"
+    confidence: Confidence = Confidence.PROXY
+    interest_score: int | None = Field(
+        default=None, description="Pinterest interest score (0-100)"
+    )
+    pin_count: int | None = Field(
+        default=None, description="Number of pins for this term"
+    )
+    monthly_searches_estimate: int | None = Field(
+        default=None, description="Estimated monthly searches"
+    )
+    is_trending: bool = Field(
+        default=False, description="Whether the term is currently trending"
+    )
+    related_terms: list[str] | None = Field(
+        default=None, description="Related search terms"
+    )
+
+
 class PlatformScore(BaseModel):
     """Normalized platform score for unified calculations."""
 
@@ -194,6 +217,7 @@ class UnifiedKeywordData(BaseModel):
     amazon: AmazonMetrics | None = None
     tiktok: TikTokMetrics | None = None
     instagram: InstagramMetrics | None = None
+    pinterest: "PinterestMetrics | None" = None
 
     # Unified metrics
     unified_demand_score: int = Field(
@@ -224,6 +248,7 @@ class UnifiedKeywordData(BaseModel):
             Platform.AMAZON: self.amazon,
             Platform.TIKTOK: self.tiktok,
             Platform.INSTAGRAM: self.instagram,
+            Platform.PINTEREST: self.pinterest,
         }
 
     @property

@@ -4,6 +4,7 @@ from src.models.keyword import (
     AmazonMetrics,
     GoogleMetrics,
     InstagramMetrics,
+    PinterestMetrics,
     PlatformMetrics,
     TikTokMetrics,
     UnifiedKeywordData,
@@ -17,5 +18,6 @@ __all__ = [
     "AmazonMetrics",
     "TikTokMetrics",
     "InstagramMetrics",
+    "PinterestMetrics",
     "UnifiedKeywordData",
 ]
