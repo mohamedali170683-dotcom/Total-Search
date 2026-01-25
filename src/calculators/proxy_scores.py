@@ -26,23 +26,19 @@ class TikTokProxyCalculator:
     """
 
     # Calibration: Convert hashtag views to monthly search estimate
-    # NOTE: We only scrape ~20 sample videos, not the full hashtag
+    # NOTE: We only scrape ~10-20 sample videos, not the full hashtag
     # So we need to extrapolate from the sample to estimate total demand
 
     # Sample extrapolation factor:
-    # If 20 videos have X views, the full hashtag likely has many more videos
-    # Typical hashtag has 100-10000x more videos than our sample
-    # Conservative multiplier to extrapolate from 20-video sample
-    SAMPLE_EXTRAPOLATION_FACTOR = 50  # Assumes hashtag has ~1000 videos (20*50)
+    # Calibrated against Keywordtool.io: naturkosmetik = 9.4K TikTok searches
+    # Previous 50x gave 64.4K (6.85x too high)
+    # New factor: 50 / 6.85 ≈ 7.3
+    SAMPLE_EXTRAPOLATION_FACTOR = 7
 
-    # Conversion factor: Calibrated against Keywordtool.io TikTok data
-    # "naturkosmetik" exact match has ~9.4K searches on TikTok
-    # With 20 videos averaging ~1K views each = 20K sample views
-    # 20K * 50 extrapolation * 0.01 factor = 10K (close to 9.4K target)
+    # Conversion factor for views to searches
     VIEWS_TO_SEARCHES_FACTOR = 0.01
 
     # Video count bonus: More content = more demand
-    # Based on sampled videos (multiply by extrapolation factor internally)
     VIDEO_COUNT_FACTOR = 2.0
 
     # Normalization bounds
