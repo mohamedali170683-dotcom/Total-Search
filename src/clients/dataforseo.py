@@ -1,4 +1,4 @@
-"""DataForSEO API client for Google and YouTube search volume data."""
+"""DataForSEO API client for Google, YouTube, and Amazon search volume data."""
 
 import base64
 import logging
@@ -7,6 +7,7 @@ from typing import Any
 from src.clients.base import BaseAPIClient, RateLimiter, batch_items
 from src.config import Settings, get_settings
 from src.models.keyword import (
+    AmazonMetrics,
     Competition,
     Confidence,
     GoogleMetrics,
@@ -379,6 +380,120 @@ class DataForSEOClient(BaseAPIClient):
         except Exception as e:
             logger.error(f"Failed to get keywords for site {domain}: {e}")
             return []
+
+    async def get_amazon_search_volume(
+        self,
+        keywords: list[str],
+        location_code: int | None = None,
+        language_code: str | None = None,
+    ) -> list[AmazonMetrics]:
+        """
+        Get Amazon search volume for keywords.
+
+        Uses the DataForSEO Labs Amazon Bulk Search Volume endpoint.
+
+        Args:
+            keywords: List of keywords to analyze
+            location_code: Location code (default: 2840 for US)
+            language_code: Language code (default: en)
+
+        Returns:
+            List of AmazonMetrics objects
+        """
+        location_code = location_code or self.settings.default_location_code
+        language_code = language_code or self.settings.default_language_code
+
+        all_metrics: list[AmazonMetrics] = []
+
+        for batch in batch_items(keywords, self.MAX_KEYWORDS_PER_REQUEST):
+            batch_metrics = await self._fetch_amazon_search_volume_batch(
+                batch, location_code, language_code
+            )
+            all_metrics.extend(batch_metrics)
+
+        return all_metrics
+
+    async def _fetch_amazon_search_volume_batch(
+        self,
+        keywords: list[str],
+        location_code: int,
+        language_code: str,
+    ) -> list[AmazonMetrics]:
+        """Fetch Amazon search volume for a batch of keywords."""
+        # DataForSEO Labs Amazon Bulk Search Volume endpoint
+        payload = [
+            {
+                "keywords": keywords,
+                "location_code": location_code,
+                "language_code": language_code,
+            }
+        ]
+
+        try:
+            response = await self.post(
+                "/v3/dataforseo_labs/amazon/bulk_search_volume/live",
+                json_data=payload,
+            )
+            return self._parse_amazon_search_volume_response(response, keywords)
+        except Exception as e:
+            logger.error(f"Failed to fetch Amazon search volume: {e}")
+            return [
+                AmazonMetrics(
+                    source="dataforseo_amazon",
+                    confidence=Confidence.PROXY,
+                    raw_data={"error": str(e)},
+                )
+                for _ in keywords
+            ]
+
+    def _parse_amazon_search_volume_response(
+        self,
+        response: dict[str, Any],
+        keywords: list[str],
+    ) -> list[AmazonMetrics]:
+        """Parse DataForSEO Amazon search volume response."""
+        metrics_list: list[AmazonMetrics] = []
+        keyword_to_metrics: dict[str, dict] = {}
+
+        tasks = response.get("tasks", [])
+        for task in tasks:
+            if task.get("status_code") != 20000:
+                logger.warning(f"Amazon task failed: {task.get('status_message')}")
+                continue
+
+            results = task.get("result", [])
+            for result in results:
+                # Result contains items array with keyword data
+                items = result.get("items", [])
+                for item in items:
+                    keyword = item.get("keyword", "").lower()
+                    keyword_to_metrics[keyword] = item
+
+        for keyword in keywords:
+            result = keyword_to_metrics.get(keyword.lower())
+
+            if not result:
+                metrics_list.append(
+                    AmazonMetrics(
+                        source="dataforseo_amazon",
+                        confidence=Confidence.PROXY,
+                    )
+                )
+                continue
+
+            # Amazon returns search_volume directly
+            search_volume = result.get("search_volume")
+
+            metrics_list.append(
+                AmazonMetrics(
+                    search_volume=search_volume,
+                    confidence=Confidence.HIGH if search_volume else Confidence.PROXY,
+                    source="dataforseo_amazon",
+                    raw_data=result,
+                )
+            )
+
+        return metrics_list
 
     def _calculate_trend(
         self,

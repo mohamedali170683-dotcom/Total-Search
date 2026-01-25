@@ -36,6 +36,12 @@ class PinterestClient(BaseAPIClient):
     # Rate limiting (conservative for scraping)
     CALLS_PER_MINUTE = 30
 
+    # Calibration multiplier for converting interest score (0-100) to search volume
+    # Based on validation: "naturkosmetik" has ~2,300 searches on Pinterest
+    # Interest score 20 * 115 = 2,300
+    # This is calibrated against Keywordtool.io Pinterest data
+    INTEREST_TO_VOLUME_MULTIPLIER = 115
+
     def __init__(
         self,
         access_token: str | None = None,
@@ -217,9 +223,10 @@ class PinterestClient(BaseAPIClient):
             # Get historical data points
             time_series = trend_data.get("time_series", [])
 
-            # Calculate proxy search volume
-            # Pinterest interest 100 ≈ ~500K monthly searches (calibration)
-            proxy_volume = int(interest_score * 5000)
+            # Calculate proxy search volume using calibrated multiplier
+            # Pinterest interest score 0-100 maps to search volume
+            # Calibrated: score 20 ≈ 2,300 searches (validated against Keywordtool.io)
+            proxy_volume = int(interest_score * self.INTEREST_TO_VOLUME_MULTIPLIER)
 
             # Determine trend
             trend, trend_velocity = self._calculate_trend_from_series(time_series)
@@ -303,8 +310,8 @@ class PinterestClient(BaseAPIClient):
         if has_shopping:
             interest_score = min(100, interest_score + 15)
 
-        # Convert to proxy volume
-        proxy_volume = int(interest_score * 5000)
+        # Convert to proxy volume using calibrated multiplier
+        proxy_volume = int(interest_score * self.INTEREST_TO_VOLUME_MULTIPLIER)
 
         return PinterestMetrics(
             proxy_score=proxy_volume,
@@ -338,7 +345,7 @@ class PinterestClient(BaseAPIClient):
                 interest_score = max(interest_score, score)
                 break
 
-        proxy_volume = int(interest_score * 5000)
+        proxy_volume = int(interest_score * self.INTEREST_TO_VOLUME_MULTIPLIER)
 
         return PinterestMetrics(
             proxy_score=proxy_volume,

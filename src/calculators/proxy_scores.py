@@ -29,12 +29,16 @@ class TikTokProxyCalculator:
     # TikTok hashtag views are cumulative, so we estimate monthly based on age
     ESTIMATED_HASHTAG_AGE_MONTHS = 12  # Conservative estimate
 
-    # Conversion factor: 1M views ≈ 10K monthly searches (based on cross-platform analysis)
-    VIEWS_TO_SEARCHES_FACTOR = 0.01
+    # Conversion factor: Calibrated against Keywordtool.io TikTok data
+    # "naturkosmetik" has ~9.4K searches on TikTok
+    # Previous factor 0.01 was giving 21.3K (2.3x too high)
+    # Adjusted: 1M views ≈ 4.4K monthly searches
+    VIEWS_TO_SEARCHES_FACTOR = 0.0044
 
     # Video count bonus: More content = more demand
-    # 1000 videos ≈ 1000 additional monthly searches
-    VIDEO_COUNT_FACTOR = 1.0
+    # Reduced from 1.0 to 0.3 to avoid over-inflating
+    # 1000 videos ≈ 300 additional monthly searches
+    VIDEO_COUNT_FACTOR = 0.3
 
     # Normalization bounds
     MIN_PROXY_SCORE = 0
@@ -202,13 +206,16 @@ class InstagramProxyCalculator:
     """
 
     # Calibration: Convert daily posts to monthly search estimate
-    # Logic: 100 daily posts ≈ 10,000 monthly searches
-    # This reflects that each post represents multiple people interested in the topic
-    DAILY_POSTS_TO_SEARCHES = 100  # 1 daily post ≈ 100 monthly searches
+    # Calibrated against Keywordtool.io Instagram data
+    # "naturkosmetik" has ~130.9K search volume with ~956K total posts
+    # ~137 searches per 1000 posts = 0.137 ratio
+    # 100 daily posts ≈ 15,000 monthly searches
+    DAILY_POSTS_TO_SEARCHES = 150  # 1 daily post ≈ 150 monthly searches
 
     # Post count signal: Total posts indicates historical demand
-    # 100K total posts ≈ 1K monthly searches baseline
-    POST_COUNT_FACTOR = 0.01
+    # Calibrated: 956K posts ≈ 130.9K searches = ~0.137 ratio
+    # Increased from 0.01 to 0.137 for better calibration
+    POST_COUNT_FACTOR = 0.137
 
     # Normalization bounds
     MIN_PROXY_SCORE = 0

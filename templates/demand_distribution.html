@@ -375,23 +375,29 @@
                         <thead>
                             <tr class="text-left border-b border-slate-200">
                                 <th class="pb-3 pr-4 font-semibold text-slate-500">Keyword</th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Search Volume">
                                     <i class="fab fa-google text-blue-500 mr-1"></i>Google
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full inline-block ml-1"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Search Volume">
                                     <i class="fab fa-youtube text-red-500 mr-1"></i>YouTube
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full inline-block ml-1"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Search Volume">
                                     <i class="fab fa-amazon text-orange-500 mr-1"></i>Amazon
+                                    <span class="w-1.5 h-1.5 bg-green-500 rounded-full inline-block ml-1"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Estimate">
                                     <i class="fab fa-tiktok text-slate-700 mr-1"></i>TikTok
+                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Estimate">
                                     <i class="fab fa-instagram text-pink-500 mr-1"></i>Instagram
+                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Estimate">
                                     <i class="fab fa-pinterest text-red-600 mr-1"></i>Pinterest
+                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1"></span>
                                 </th>
                                 <th class="pb-3 pl-3 text-center font-semibold text-slate-500">Best</th>
                             </tr>
@@ -426,12 +432,22 @@
                     </table>
                 </div>
 
-                <!-- Data Quality Notice -->
-                <div class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-lg" x-show="hasDataQualityIssue()">
-                    <p class="text-xs text-amber-700">
+                <!-- Data Source Transparency Notice -->
+                <div class="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
+                    <p class="text-xs text-slate-600 mb-2">
                         <i class="fas fa-info-circle mr-1"></i>
-                        <strong>Note:</strong> Some platforms may show estimated or limited data. YouTube and Amazon data availability varies by region.
+                        <strong>Data Source Transparency:</strong>
                     </p>
+                    <div class="flex flex-wrap gap-4 text-xs">
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-green-500 rounded-full"></span>
+                            <span class="text-slate-600"><strong>Search Volume:</strong> Google, YouTube, Amazon</span>
+                        </div>
+                        <div class="flex items-center space-x-2">
+                            <span class="w-2 h-2 bg-amber-500 rounded-full"></span>
+                            <span class="text-slate-600"><strong>Engagement Estimate:</strong> TikTok, Instagram, Pinterest</span>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>

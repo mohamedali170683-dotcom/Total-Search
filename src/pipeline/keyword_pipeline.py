@@ -257,7 +257,7 @@ class KeywordPipeline:
             tasks.append(self._fetch_youtube_data(keywords, keyword_data, options))
 
         if Platform.AMAZON in options.platforms:
-            tasks.append(self._fetch_amazon_data(keywords, keyword_data))
+            tasks.append(self._fetch_amazon_data(keywords, keyword_data, options))
 
         if Platform.TIKTOK in options.platforms:
             tasks.append(self._fetch_tiktok_data(keywords, keyword_data, options))
@@ -284,7 +284,7 @@ class KeywordPipeline:
             await self._fetch_youtube_data(keywords, keyword_data, options)
 
         if Platform.AMAZON in options.platforms:
-            await self._fetch_amazon_data(keywords, keyword_data)
+            await self._fetch_amazon_data(keywords, keyword_data, options)
 
         if Platform.TIKTOK in options.platforms:
             await self._fetch_tiktok_data(keywords, keyword_data, options)
@@ -325,27 +325,15 @@ class KeywordPipeline:
         keyword_data: dict[str, UnifiedKeywordData],
         options: PipelineOptions,
     ) -> None:
-        """Fetch YouTube search volume data using Google Trends."""
+        """Fetch YouTube search volume data using DataForSEO clickstream data."""
         try:
-            # Map location code to geo code for Google Trends
-            geo_map = {
-                2840: "US",    # United States
-                2276: "DE",    # Germany
-                2826: "GB",    # United Kingdom
-                2250: "FR",    # France
-                2724: "ES",    # Spain
-                2380: "IT",    # Italy
-                2528: "NL",    # Netherlands
-                2036: "AU",    # Australia
-                2124: "CA",    # Canada
-                2076: "BR",    # Brazil
-                2484: "MX",    # Mexico
-                2392: "JP",    # Japan
-            }
-            geo = geo_map.get(options.location_code, "US")
-
-            logger.debug(f"Fetching YouTube data via Google Trends for {len(keywords)} keywords (geo: {geo})")
-            metrics = await self.google_trends.get_youtube_search_volume(keywords, geo=geo)
+            logger.debug(f"Fetching YouTube data via DataForSEO for {len(keywords)} keywords (location: {options.location_code})")
+            # Use DataForSEO which has YouTube clickstream data (more reliable than Google Trends)
+            metrics = await self.dataforseo.get_youtube_search_volume(
+                keywords,
+                location_code=options.location_code,
+                language_code=options.language_code,
+            )
 
             for kw, metric in zip(keywords, metrics):
                 keyword_data[kw].youtube = metric
@@ -360,11 +348,17 @@ class KeywordPipeline:
         self,
         keywords: list[str],
         keyword_data: dict[str, UnifiedKeywordData],
+        options: PipelineOptions,
     ) -> None:
-        """Fetch Amazon search volume data."""
+        """Fetch Amazon search volume data using DataForSEO."""
         try:
-            logger.debug(f"Fetching Amazon data for {len(keywords)} keywords")
-            metrics = await self.junglescout.get_amazon_search_volume(keywords)
+            logger.debug(f"Fetching Amazon data via DataForSEO for {len(keywords)} keywords (location: {options.location_code})")
+            # Use DataForSEO which has Amazon search volume data
+            metrics = await self.dataforseo.get_amazon_search_volume(
+                keywords,
+                location_code=options.location_code,
+                language_code=options.language_code,
+            )
 
             for kw, metric in zip(keywords, metrics):
                 keyword_data[kw].amazon = metric
