@@ -31,8 +31,9 @@ class GoogleTrendsClient:
     """
 
     # Base multiplier to convert Google Trends index to estimated searches
-    # This is calibrated against known search volumes
-    YOUTUBE_TRENDS_MULTIPLIER = 500
+    # Calibrated against Keywordtool.io: "naturkosmetik" has ~70K YouTube searches
+    # If trends index is ~50, then 50 * 1400 = 70,000
+    YOUTUBE_TRENDS_MULTIPLIER = 1400
 
     # Timeout for requests
     REQUEST_TIMEOUT = 30

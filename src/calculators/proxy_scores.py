@@ -30,15 +30,14 @@ class TikTokProxyCalculator:
     ESTIMATED_HASHTAG_AGE_MONTHS = 12  # Conservative estimate
 
     # Conversion factor: Calibrated against Keywordtool.io TikTok data
-    # "naturkosmetik" has ~9.4K searches on TikTok
-    # Previous factor 0.01 was giving 21.3K (2.3x too high)
-    # Adjusted: 1M views ≈ 4.4K monthly searches
-    VIEWS_TO_SEARCHES_FACTOR = 0.0044
+    # "naturkosmetik" exact match has ~9.4K searches on TikTok
+    # Previous factor 0.0044 was giving 3K (3x too low)
+    # Adjusted: 1M views ≈ 14K monthly searches
+    VIEWS_TO_SEARCHES_FACTOR = 0.014
 
     # Video count bonus: More content = more demand
-    # Reduced from 1.0 to 0.3 to avoid over-inflating
-    # 1000 videos ≈ 300 additional monthly searches
-    VIDEO_COUNT_FACTOR = 0.3
+    # 1000 videos ≈ 500 additional monthly searches
+    VIDEO_COUNT_FACTOR = 0.5
 
     # Normalization bounds
     MIN_PROXY_SCORE = 0

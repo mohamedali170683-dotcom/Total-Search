@@ -325,14 +325,28 @@ class KeywordPipeline:
         keyword_data: dict[str, UnifiedKeywordData],
         options: PipelineOptions,
     ) -> None:
-        """Fetch YouTube search volume data using DataForSEO clickstream data."""
+        """Fetch YouTube search volume data using Google Trends (YouTube property)."""
         try:
-            logger.debug(f"Fetching YouTube data via DataForSEO for {len(keywords)} keywords (location: {options.location_code})")
-            # Use DataForSEO which has YouTube clickstream data (more reliable than Google Trends)
-            metrics = await self.dataforseo.get_youtube_search_volume(
+            # Map location code to geo code for Google Trends
+            geo_map = {
+                2840: "US",  # United States
+                2276: "DE",  # Germany
+                2826: "GB",  # United Kingdom
+                2250: "FR",  # France
+                2724: "ES",  # Spain
+                2380: "IT",  # Italy
+                2528: "NL",  # Netherlands
+                2056: "BE",  # Belgium
+                2040: "AT",  # Austria
+                2756: "CH",  # Switzerland
+            }
+            geo = geo_map.get(options.location_code, "US")
+
+            logger.debug(f"Fetching YouTube data via Google Trends for {len(keywords)} keywords (geo: {geo})")
+            # Use Google Trends with YouTube property for YouTube-specific search data
+            metrics = await self.google_trends.get_youtube_search_volume(
                 keywords,
-                location_code=options.location_code,
-                language_code=options.language_code,
+                geo=geo,
             )
 
             for kw, metric in zip(keywords, metrics):
