@@ -142,9 +142,9 @@ class KeywordData(BaseModel):
 # API Endpoints
 @app.get("/")
 async def root_redirect():
-    """Redirect root to home page."""
+    """Redirect root to demand distribution dashboard."""
     from fastapi.responses import RedirectResponse
-    return RedirectResponse(url="/home", status_code=307)
+    return RedirectResponse(url="/demand", status_code=307)
 
 
 @app.get("/home")
