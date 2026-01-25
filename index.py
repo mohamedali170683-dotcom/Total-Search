@@ -140,6 +140,13 @@ class KeywordData(BaseModel):
 
 
 # API Endpoints
+@app.get("/")
+async def root_redirect():
+    """Redirect root to home page."""
+    from fastapi.responses import RedirectResponse
+    return RedirectResponse(url="/home", status_code=307)
+
+
 @app.get("/home")
 async def home_page(request: Request):
     """Render the main dashboard."""
