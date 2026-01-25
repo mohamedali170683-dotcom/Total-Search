@@ -42,7 +42,7 @@
     }
   ],
   "functions": {
-    "api/main.py": {
+    "api/*.py": {
       "maxDuration": 60
     }
   }
