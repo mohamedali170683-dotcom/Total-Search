@@ -153,6 +153,8 @@ class GoogleTrendsClient:
         result: dict[str, dict[str, Any]] = {}
 
         try:
+            logger.info(f"Fetching YouTube trends for {keywords} in geo={geo}")
+
             # Build payload for YouTube search
             # gprop='youtube' targets YouTube specifically
             self.pytrends.build_payload(
@@ -167,8 +169,20 @@ class GoogleTrendsClient:
             interest_df = self.pytrends.interest_over_time()
 
             if interest_df.empty:
-                logger.warning(f"No Google Trends data for keywords: {keywords}")
-                return result
+                logger.warning(f"No Google Trends YouTube data for keywords: {keywords} (geo={geo})")
+                # Try without geo restriction as fallback
+                logger.info(f"Retrying without geo restriction...")
+                self.pytrends.build_payload(
+                    keywords,
+                    cat=0,
+                    timeframe=timeframe,
+                    gprop="youtube",
+                )
+                interest_df = self.pytrends.interest_over_time()
+
+                if interest_df.empty:
+                    logger.warning(f"Still no data after fallback for: {keywords}")
+                    return result
 
             for keyword in keywords:
                 if keyword not in interest_df.columns:

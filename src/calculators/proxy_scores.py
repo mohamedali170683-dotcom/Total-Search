@@ -26,18 +26,24 @@ class TikTokProxyCalculator:
     """
 
     # Calibration: Convert hashtag views to monthly search estimate
-    # TikTok hashtag views are cumulative, so we estimate monthly based on age
-    ESTIMATED_HASHTAG_AGE_MONTHS = 12  # Conservative estimate
+    # NOTE: We only scrape ~20 sample videos, not the full hashtag
+    # So we need to extrapolate from the sample to estimate total demand
+
+    # Sample extrapolation factor:
+    # If 20 videos have X views, the full hashtag likely has many more videos
+    # Typical hashtag has 100-10000x more videos than our sample
+    # Conservative multiplier to extrapolate from 20-video sample
+    SAMPLE_EXTRAPOLATION_FACTOR = 50  # Assumes hashtag has ~1000 videos (20*50)
 
     # Conversion factor: Calibrated against Keywordtool.io TikTok data
     # "naturkosmetik" exact match has ~9.4K searches on TikTok
-    # Previous factor 0.0044 was giving 3K (3x too low)
-    # Adjusted: 1M views ≈ 14K monthly searches
-    VIEWS_TO_SEARCHES_FACTOR = 0.014
+    # With 20 videos averaging ~1K views each = 20K sample views
+    # 20K * 50 extrapolation * 0.01 factor = 10K (close to 9.4K target)
+    VIEWS_TO_SEARCHES_FACTOR = 0.01
 
     # Video count bonus: More content = more demand
-    # 1000 videos ≈ 500 additional monthly searches
-    VIDEO_COUNT_FACTOR = 0.5
+    # Based on sampled videos (multiply by extrapolation factor internally)
+    VIDEO_COUNT_FACTOR = 2.0
 
     # Normalization bounds
     MIN_PROXY_SCORE = 0
@@ -98,18 +104,20 @@ class TikTokProxyCalculator:
 
         This converts hashtag views and video counts into an estimated
         monthly search volume equivalent.
+
+        NOTE: We only sample ~20 videos, so we extrapolate to estimate
+        the full hashtag's demand.
         """
-        # Primary signal: Hashtag views → monthly searches
-        # Estimate monthly views from total views
-        monthly_views = hashtag_views / self.ESTIMATED_HASHTAG_AGE_MONTHS
+        # Extrapolate from sample to estimate full hashtag metrics
+        estimated_total_views = hashtag_views * self.SAMPLE_EXTRAPOLATION_FACTOR
+        estimated_total_videos = video_count * self.SAMPLE_EXTRAPOLATION_FACTOR
 
+        # Primary signal: Estimated total views → monthly searches
         # Convert views to search equivalent
-        # Logic: 1M monthly views ≈ 10K monthly searches
-        views_as_searches = monthly_views * self.VIEWS_TO_SEARCHES_FACTOR
+        views_as_searches = estimated_total_views * self.VIEWS_TO_SEARCHES_FACTOR
 
-        # Secondary signal: Video count indicates content creator demand
-        # More videos = more people searching/creating around this topic
-        video_count_signal = video_count * self.VIDEO_COUNT_FACTOR
+        # Secondary signal: Estimated video count indicates content creator demand
+        video_count_signal = estimated_total_videos * self.VIDEO_COUNT_FACTOR
 
         # Combined demand score
         demand_score = views_as_searches + video_count_signal
