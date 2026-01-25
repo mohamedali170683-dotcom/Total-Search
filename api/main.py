@@ -716,15 +716,21 @@ async def get_brand_metrics(brand_id: int):
                         metric = session.execute(metric_stmt).scalar_one_or_none()
 
                         if metric:
-                            # Only mark as "has data" if we have real search volume (not just proxy)
-                            if metric.search_volume and metric.search_volume > 0:
-                                has_data = True
-                            elif metric.proxy_score and metric.proxy_score > 0:
-                                # For social platforms (TikTok, Instagram), proxy score is valid data
-                                if platform in ['tiktok', 'instagram']:
-                                    has_data = True
+                            # Determine metric type for honest labeling
+                            metric_type = getattr(metric, 'metric_type', None) or 'search_volume'
 
-                            volume = metric.search_volume or metric.proxy_score or 0
+                            # Get the appropriate metric value based on type
+                            if metric_type == 'engagement':
+                                volume = getattr(metric, 'engagement_score', None) or metric.proxy_score or 0
+                            elif metric_type == 'interest_index':
+                                volume = getattr(metric, 'interest_score', None) or 0
+                            else:
+                                volume = metric.search_volume or 0
+
+                            # Mark as "has data" if we have any valid metric
+                            if volume > 0:
+                                has_data = True
+
                             total_volume += volume
                             if metric.trend_velocity:
                                 avg_trend += metric.trend_velocity
@@ -737,8 +743,17 @@ async def get_brand_metrics(brand_id: int):
                             elif confidence == "none":
                                 confidence = metric.confidence or "proxy"
 
+                # Determine metric label based on platform
+                metric_label = "search_volume"
+                if platform in ['tiktok', 'instagram']:
+                    metric_label = "engagement"
+                elif platform == 'pinterest':
+                    metric_label = "interest_index"
+
                 platform_metrics[platform] = {
                     "volume": total_volume,
+                    "metricType": metric_label,
+                    "metricLabel": _get_metric_label(metric_label),
                     "trend": round(avg_trend / count * 100, 1) if count > 0 else 0,
                     "hasData": has_data,
                     "confidence": confidence,
@@ -780,7 +795,15 @@ async def get_brand_metrics(brand_id: int):
                             ).scalar_one_or_none()
 
                             if metric:
-                                total_vol += metric.search_volume or metric.proxy_score or 0
+                                # Get appropriate metric value based on type
+                                metric_type = getattr(metric, 'metric_type', None) or 'search_volume'
+                                if metric_type == 'engagement':
+                                    vol = getattr(metric, 'engagement_score', None) or metric.proxy_score or 0
+                                elif metric_type == 'interest_index':
+                                    vol = getattr(metric, 'interest_score', None) or 0
+                                else:
+                                    vol = metric.search_volume or 0
+                                total_vol += vol
 
                     comp_metrics[platform] = {"volume": total_vol}
 
@@ -820,6 +843,36 @@ async def get_brand_metrics(brand_id: int):
     except Exception as e:
         import traceback
         raise HTTPException(status_code=500, detail=f"{str(e)}\n{traceback.format_exc()}")
+
+
+def _get_metric_label(metric_type: str) -> str:
+    """
+    Get human-readable label for metric type.
+
+    This provides honest labeling of what each metric actually measures:
+    - search_volume: Verified search data (Google, YouTube, Amazon)
+    - engagement: Audience engagement (TikTok, Instagram) - NOT search volume
+    - interest_index: Relative interest (Pinterest) - NOT search volume
+    """
+    labels = {
+        "search_volume": "Monthly Searches",
+        "engagement": "Audience Engagement",
+        "interest_index": "Interest Index",
+    }
+    return labels.get(metric_type, "Volume")
+
+
+def _get_metric_explanation(platform: str) -> str:
+    """Get explanation of what the metric measures for a platform."""
+    explanations = {
+        "google": "Verified monthly search volume from Google Ads data",
+        "youtube": "Verified monthly search volume from YouTube search data",
+        "amazon": "Verified monthly search volume from Amazon search data",
+        "tiktok": "Audience engagement (views, likes, shares) - NOT search volume. TikTok is algorithm-driven.",
+        "instagram": "Community engagement (posts, likes, comments) - NOT search volume. Instagram is browse-first.",
+        "pinterest": "Relative interest index (0-100) - shows topic popularity compared to other Pinterest topics.",
+    }
+    return explanations.get(platform, "Estimated volume metric")
 
 
 def generate_content_opportunities(brand_name: str, variants: list[str], metrics: dict) -> list[dict]:
@@ -1353,21 +1406,31 @@ async def _fetch_demand_data(keywords: list[str], country: str = "us", language:
                 "platforms": {}
             }
 
-            # Add per-platform data
+            # Add per-platform data with honest labeling
             for platform, metrics in result.platforms_dict.items():
                 if metrics:
+                    # Determine metric type for honest labeling
+                    metric_type = metrics.metric_type.value if metrics.metric_type else "search_volume"
                     results[result.keyword]["platforms"][platform.value] = {
                         "volume": metrics.effective_volume,
+                        "metricType": metric_type,
+                        "metricLabel": _get_metric_label(metric_type),
+                        "explanation": metrics.metric_explanation or _get_metric_explanation(platform.value),
                         "trend": metrics.trend.value if metrics.trend else "stable",
                         "trend_velocity": metrics.trend_velocity,
                         "confidence": metrics.confidence.value,
+                        "isVerifiedSearchData": metrics.is_verified_search_data,
                     }
                 else:
                     results[result.keyword]["platforms"][platform.value] = {
                         "volume": 0,
+                        "metricType": "unknown",
+                        "metricLabel": "No Data",
+                        "explanation": "No data available for this platform",
                         "trend": None,
                         "trend_velocity": None,
                         "confidence": "none",
+                        "isVerifiedSearchData": False,
                     }
 
     except Exception as e:
@@ -2223,6 +2286,230 @@ async def export_comparison_pdf(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Comparison export failed: {str(e)}")
+
+
+# =============================================================================
+# Calibration API Endpoints
+# =============================================================================
+
+@app.get("/api/calibration/status")
+async def get_calibration_status():
+    """
+    Get the status of calibration models for each platform.
+
+    Shows how many calibration points are collected and whether models are fitted.
+    """
+    try:
+        from src.calibration.regression_models import (
+            get_tiktok_calibrator,
+            get_instagram_calibrator,
+            get_youtube_calibrator,
+            get_pinterest_calibrator,
+        )
+
+        return {
+            "tiktok": get_tiktok_calibrator().get_model_stats(),
+            "instagram": get_instagram_calibrator().get_model_stats(),
+            "youtube": get_youtube_calibrator().get_model_stats(),
+            "pinterest": get_pinterest_calibrator().get_model_stats(),
+        }
+    except ImportError:
+        return {"error": "Calibration module not available"}
+    except Exception as e:
+        return {"error": str(e)}
+
+
+@app.get("/api/calibration/keywords")
+async def get_calibration_keywords():
+    """Get the recommended calibration keywords to collect data for."""
+    try:
+        from src.calibration.calibration_keywords import (
+            get_all_calibration_keywords,
+            get_calibration_keywords_by_volume,
+        )
+
+        return {
+            "keywords": get_all_calibration_keywords(),
+            "by_volume": get_calibration_keywords_by_volume(),
+            "total_count": len(get_all_calibration_keywords()),
+        }
+    except ImportError:
+        return {"error": "Calibration module not available"}
+
+
+class CalibrationDataRequest(BaseModel):
+    """Request model for submitting calibration data from Keywordtool.io."""
+    keyword: str = Field(..., min_length=1, max_length=200)
+    tiktok_volume: int = Field(default=0, ge=0)
+    instagram_volume: int = Field(default=0, ge=0)
+    youtube_volume: int = Field(default=0, ge=0)
+    pinterest_volume: int = Field(default=0, ge=0)
+
+
+@app.post("/api/calibration/add")
+async def add_calibration_data(request: CalibrationDataRequest):
+    """
+    Add calibration data from Keywordtool.io for a keyword.
+
+    This collects our raw metrics for the keyword and pairs it with
+    the ground truth from Keywordtool.io.
+    """
+    try:
+        from src.calibration.regression_models import (
+            CalibrationPoint,
+            get_tiktok_calibrator,
+            get_instagram_calibrator,
+            get_youtube_calibrator,
+            get_pinterest_calibrator,
+        )
+
+        # Fetch our raw metrics for this keyword
+        settings = get_settings()
+        keyword = request.keyword
+
+        # Collect metrics from our APIs
+        raw_metrics = {}
+
+        # TikTok
+        if request.tiktok_volume > 0:
+            try:
+                from src.clients.apify import ApifyClient
+                async with ApifyClient(settings=settings) as client:
+                    hashtag = keyword.replace(" ", "").lower()
+                    data = await client.run_tiktok_hashtag_scraper([hashtag], results_per_hashtag=20, timeout_secs=45)
+                    raw_metrics["tiktok"] = data.get(hashtag, {})
+            except Exception as e:
+                raw_metrics["tiktok_error"] = str(e)
+
+        # Instagram
+        if request.instagram_volume > 0:
+            try:
+                from src.clients.apify import ApifyClient
+                async with ApifyClient(settings=settings) as client:
+                    hashtag = keyword.replace(" ", "").lower()
+                    data = await client.run_instagram_hashtag_scraper([hashtag], results_per_hashtag=20, timeout_secs=45)
+                    raw_metrics["instagram"] = data.get(hashtag, {})
+            except Exception as e:
+                raw_metrics["instagram_error"] = str(e)
+
+        # YouTube (Google Trends)
+        if request.youtube_volume > 0:
+            try:
+                from src.clients.google_trends import GoogleTrendsClient
+                async with GoogleTrendsClient(settings=settings) as client:
+                    metrics = await client.get_youtube_search_volume([keyword], geo="DE")
+                    if metrics:
+                        raw_metrics["youtube"] = metrics[0].raw_data or {}
+            except Exception as e:
+                raw_metrics["youtube_error"] = str(e)
+
+        # Pinterest
+        if request.pinterest_volume > 0:
+            try:
+                from src.clients.pinterest import PinterestClient
+                async with PinterestClient(settings=settings) as client:
+                    metrics = await client.get_search_volume(keyword, country="DE")
+                    raw_metrics["pinterest"] = metrics.raw_data or {}
+            except Exception as e:
+                raw_metrics["pinterest_error"] = str(e)
+
+        # Add calibration points
+        added = []
+
+        # TikTok
+        if request.tiktok_volume > 0 and "tiktok" in raw_metrics:
+            stats = raw_metrics["tiktok"].get("stats", {})
+            point = CalibrationPoint(
+                keyword=keyword,
+                keywordtool_volume=request.tiktok_volume,
+                tiktok_views=stats.get("total_views", 0),
+                tiktok_video_count=stats.get("video_count", 0),
+                tiktok_avg_likes=stats.get("avg_likes", 0),
+                tiktok_avg_shares=stats.get("avg_shares", 0),
+            )
+            get_tiktok_calibrator().add_calibration_point(point)
+            added.append("tiktok")
+
+        # Instagram
+        if request.instagram_volume > 0 and "instagram" in raw_metrics:
+            stats = raw_metrics["instagram"].get("stats", {})
+            point = CalibrationPoint(
+                keyword=keyword,
+                keywordtool_volume=request.instagram_volume,
+                instagram_post_count=stats.get("post_count", 0),
+                instagram_daily_posts=stats.get("daily_posts", 0),
+                instagram_avg_likes=stats.get("avg_likes", 0),
+                instagram_avg_comments=stats.get("avg_comments", 0),
+            )
+            get_instagram_calibrator().add_calibration_point(point)
+            added.append("instagram")
+
+        # YouTube
+        if request.youtube_volume > 0 and "youtube" in raw_metrics:
+            point = CalibrationPoint(
+                keyword=keyword,
+                keywordtool_volume=request.youtube_volume,
+                youtube_trends_index=raw_metrics["youtube"].get("trends_index", 0),
+            )
+            get_youtube_calibrator().add_calibration_point(point)
+            added.append("youtube")
+
+        # Pinterest
+        if request.pinterest_volume > 0 and "pinterest" in raw_metrics:
+            point = CalibrationPoint(
+                keyword=keyword,
+                keywordtool_volume=request.pinterest_volume,
+                pinterest_interest_score=raw_metrics["pinterest"].get("interest_score", 0),
+            )
+            get_pinterest_calibrator().add_calibration_point(point)
+            added.append("pinterest")
+
+        return {
+            "success": True,
+            "keyword": keyword,
+            "platforms_added": added,
+            "raw_metrics_collected": {k: v for k, v in raw_metrics.items() if not k.endswith("_error")},
+            "errors": {k: v for k, v in raw_metrics.items() if k.endswith("_error")},
+        }
+
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Calibration module not available")
+    except Exception as e:
+        import traceback
+        raise HTTPException(status_code=500, detail=f"Failed to add calibration data: {str(e)}\n{traceback.format_exc()}")
+
+
+@app.post("/api/calibration/fit")
+async def fit_calibration_models():
+    """
+    Fit regression models using collected calibration data.
+
+    Call this after adding enough calibration points (10+ per platform).
+    """
+    try:
+        from src.calibration.regression_models import (
+            get_tiktok_calibrator,
+            get_instagram_calibrator,
+            get_youtube_calibrator,
+            get_pinterest_calibrator,
+        )
+
+        results = {
+            "tiktok": get_tiktok_calibrator().fit_model(),
+            "instagram": get_instagram_calibrator().fit_model(),
+            "youtube": get_youtube_calibrator().fit_model(),
+            "pinterest": get_pinterest_calibrator().fit_model(),
+        }
+
+        return {
+            "success": True,
+            "models": results,
+        }
+
+    except ImportError:
+        raise HTTPException(status_code=500, detail="Calibration module not available")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to fit models: {str(e)}")
 
 
 # Vercel serverless handler

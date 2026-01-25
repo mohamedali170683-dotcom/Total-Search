@@ -11,7 +11,7 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from src.config import Settings, get_settings
 from src.db.models import Base, Keyword, KeywordMetric, UnifiedScore
-from src.models.keyword import Platform, PlatformMetrics, UnifiedKeywordData
+from src.models.keyword import MetricType, Platform, PlatformMetrics, UnifiedKeywordData
 
 logger = logging.getLogger(__name__)
 
@@ -45,6 +45,28 @@ class KeywordRepository:
     def get_session(self) -> Session:
         """Get a database session."""
         return self.SessionLocal()
+
+    def _get_effective_volume(self, metric: KeywordMetric) -> int:
+        """
+        Get the effective volume value from a metric based on its type.
+
+        This handles the different metric types:
+        - search_volume: For Google, YouTube, Amazon (verified search data)
+        - engagement_score: For TikTok, Instagram (audience engagement)
+        - interest_score: For Pinterest (relative interest 0-100)
+        - proxy_score: Deprecated, for backward compatibility
+        """
+        metric_type = metric.metric_type or "search_volume"
+
+        if metric_type == "search_volume":
+            return metric.search_volume or 0
+        elif metric_type == "engagement":
+            return metric.engagement_score or metric.proxy_score or 0
+        elif metric_type == "interest_index":
+            return metric.interest_score or 0
+        else:
+            # Fallback for backward compatibility
+            return metric.search_volume or metric.engagement_score or metric.proxy_score or 0
 
     def save_keyword_data(
         self,
@@ -157,25 +179,37 @@ class KeywordRepository:
             "keyword_id": keyword_id,
             "platform": platform.value,
             "collected_date": collected_date,
+            # Metric type classification for honest labeling
+            "metric_type": metrics.metric_type.value if metrics.metric_type else MetricType.SEARCH_VOLUME.value,
+            # Primary metrics by type
             "search_volume": metrics.search_volume,
+            "engagement_score": metrics.engagement_score,
+            "interest_score": metrics.interest_score,
+            # Deprecated - keep for backward compatibility
             "proxy_score": metrics.proxy_score,
+            # Metadata
             "trend": metrics.trend.value if metrics.trend else None,
             "trend_velocity": metrics.trend_velocity,
             "competition": metrics.competition.value if metrics.competition else None,
             "cpc": metrics.cpc,
             "confidence": metrics.confidence.value,
+            "metric_explanation": metrics.metric_explanation,
             "raw_data": metrics.raw_data,
         }
 
         # Build the update set for upsert
         update_set = {
+            "metric_type": values["metric_type"],
             "search_volume": values["search_volume"],
+            "engagement_score": values["engagement_score"],
+            "interest_score": values["interest_score"],
             "proxy_score": values["proxy_score"],
             "trend": values["trend"],
             "trend_velocity": values["trend_velocity"],
             "competition": values["competition"],
             "cpc": values["cpc"],
             "confidence": values["confidence"],
+            "metric_explanation": values["metric_explanation"],
             "raw_data": values["raw_data"],
             "collected_at": datetime.utcnow(),
         }
@@ -446,9 +480,12 @@ class KeywordRepository:
                 if platform not in history:
                     history[platform] = []
 
+                # Get the appropriate metric value based on type
+                volume = self._get_effective_volume(metric)
                 history[platform].append({
                     "date": metric.collected_date,
-                    "volume": metric.search_volume or metric.proxy_score or 0,
+                    "volume": volume,
+                    "metric_type": metric.metric_type or "search_volume",
                     "trend": metric.trend,
                     "trend_velocity": metric.trend_velocity,
                 })
@@ -515,7 +552,8 @@ class KeywordRepository:
                 {
                     "keyword": keyword,
                     "platform": metric.platform,
-                    "volume": metric.search_volume or metric.proxy_score or 0,
+                    "volume": self._get_effective_volume(metric),
+                    "metric_type": metric.metric_type or "search_volume",
                     "trend_velocity": metric.trend_velocity,
                     "collected_at": metric.collected_at.isoformat() if metric.collected_at else None,
                 }
@@ -572,7 +610,7 @@ class KeywordRepository:
             for metric in metrics:
                 date = metric.collected_date
                 platform = metric.platform
-                volume = metric.search_volume or metric.proxy_score or 0
+                volume = self._get_effective_volume(metric)
                 time_series[date][platform] += volume
 
             # Convert to sorted list

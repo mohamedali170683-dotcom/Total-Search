@@ -60,18 +60,33 @@ class KeywordMetric(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     keyword_id = Column(Integer, ForeignKey("keywords.id", ondelete="CASCADE"), nullable=False)
-    platform = Column(String(50), nullable=False)  # google, youtube, amazon, tiktok, instagram
+    platform = Column(String(50), nullable=False)  # google, youtube, amazon, tiktok, instagram, pinterest
     collected_at = Column(DateTime, default=datetime.utcnow, nullable=False)
     collected_date = Column(String(10), nullable=False)  # YYYY-MM-DD for unique constraint
 
-    # Common metrics
-    search_volume = Column(Integer, nullable=True)
+    # Metric type classification (IMPORTANT for honest labeling)
+    # search_volume: Verified search data (Google, YouTube, Amazon)
+    # engagement: Audience engagement metrics (TikTok, Instagram)
+    # interest_index: Relative interest score (Pinterest)
+    metric_type = Column(String(20), nullable=True, default="search_volume")
+
+    # Primary metrics by type
+    search_volume = Column(Integer, nullable=True)  # For Google, YouTube, Amazon
+    engagement_score = Column(Integer, nullable=True)  # For TikTok, Instagram (NOT search volume)
+    interest_score = Column(Integer, nullable=True)  # For Pinterest (relative 0-100)
+
+    # Deprecated - use engagement_score instead
     proxy_score = Column(Integer, nullable=True)
+
+    # Trend and quality metrics
     trend = Column(String(20), nullable=True)  # growing, stable, declining
     trend_velocity = Column(Float, nullable=True)
     competition = Column(String(20), nullable=True)  # low, medium, high
     cpc = Column(Float, nullable=True)
-    confidence = Column(String(20), nullable=True)  # high, medium, proxy
+    confidence = Column(String(20), nullable=True)  # high, calibrated, medium, proxy
+
+    # Human-readable explanation of what this metric represents
+    metric_explanation = Column(Text, nullable=True)
 
     # Platform-specific data (stored as JSON)
     raw_data = Column(JSON, nullable=True)

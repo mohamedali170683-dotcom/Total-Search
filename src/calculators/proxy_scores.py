@@ -1,4 +1,20 @@
-"""Proxy score calculators for TikTok and Instagram metrics."""
+"""
+Engagement score calculators for TikTok and Instagram metrics.
+
+IMPORTANT: These calculators produce ENGAGEMENT metrics, NOT search volume estimates.
+
+What we measure:
+- TikTok: Hashtag views, video counts, content engagement
+- Instagram: Post counts, posting frequency, community engagement
+
+What we DO NOT measure:
+- How many people search for these terms on TikTok/Instagram
+- Direct user intent or demand (like Google search volume)
+
+The resulting scores represent "audience engagement" - how much content exists
+and how much interaction that content receives. This is valuable data but
+fundamentally different from search volume.
+"""
 
 import logging
 from typing import Any
@@ -6,6 +22,7 @@ from typing import Any
 from src.models.keyword import (
     Confidence,
     InstagramMetrics,
+    MetricType,
     TikTokMetrics,
     TrendDirection,
 )
@@ -13,47 +30,48 @@ from src.models.keyword import (
 logger = logging.getLogger(__name__)
 
 
-class TikTokProxyCalculator:
+class TikTokEngagementCalculator:
     """
-    Converts TikTok hashtag metrics into a search-volume-like score.
+    Calculates TikTok ENGAGEMENT metrics from hashtag data.
 
-    Formula focuses on DEMAND signals (views/post counts), NOT engagement:
-    - hashtag_views: Total views (all-time) - primary demand signal
-    - video_count: Number of videos using hashtag - content creation demand
+    IMPORTANT: This produces ENGAGEMENT scores, NOT search volume estimates.
 
-    The output represents estimated monthly searches/interest based on
-    hashtag view counts, calibrated to be comparable to Google search volume.
+    What we measure:
+    - hashtag_views: Total views on content with this hashtag (algorithm-driven exposure)
+    - video_count: Number of videos using hashtag (creator activity/supply)
+    - avg_likes, avg_comments, avg_shares: Audience interaction rates
+
+    What this tells you:
+    - "X million users have engaged with content about this topic on TikTok"
+    - How much content exists (supply side)
+    - How audiences interact with this content
+
+    What this does NOT tell you:
+    - How many people actively search for this term on TikTok
+    - Direct user intent or demand
+
+    The TikTok algorithm pushes content to users; users don't primarily search.
+    High engagement ≠ high search demand. They are different metrics.
     """
 
-    # Calibration: Convert hashtag views to monthly search estimate
-    # NOTE: We only scrape ~10-20 sample videos, not the full hashtag
-    # So we need to extrapolate from the sample to estimate total demand
+    # Scaling factors for engagement score calculation
+    # These normalize the score to a reasonable range, NOT to match search volume
+    VIEWS_WEIGHT = 0.001  # 1M views = 1000 engagement points
+    VIDEO_COUNT_WEIGHT = 10  # Each video = 10 engagement points
 
-    # Sample extrapolation factor:
-    # Calibrated against Keywordtool.io: naturkosmetik = 9.4K TikTok searches
-    # Previous 50x gave 64.4K (6.85x too high)
-    # New factor: 50 / 6.85 ≈ 7.3
-    SAMPLE_EXTRAPOLATION_FACTOR = 7
-
-    # Conversion factor for views to searches
-    VIEWS_TO_SEARCHES_FACTOR = 0.01
-
-    # Video count bonus: More content = more demand
-    VIDEO_COUNT_FACTOR = 2.0
-
-    # Normalization bounds
-    MIN_PROXY_SCORE = 0
-    MAX_PROXY_SCORE = 10_000_000  # Cap at 10M to match Google's scale
+    # Bounds
+    MIN_ENGAGEMENT_SCORE = 0
+    MAX_ENGAGEMENT_SCORE = 100_000_000  # Allow large engagement numbers
 
     def calculate(self, raw_data: dict[str, Any]) -> TikTokMetrics:
         """
-        Calculate TikTok proxy metrics from raw scraped data.
+        Calculate TikTok ENGAGEMENT metrics from raw scraped data.
 
         Args:
             raw_data: Raw data from Apify TikTok scraper
 
         Returns:
-            TikTokMetrics with calculated proxy score based on views/post counts
+            TikTokMetrics with engagement_score (NOT search volume)
         """
         stats = raw_data.get("stats", {})
         videos = raw_data.get("videos", [])
@@ -64,20 +82,23 @@ class TikTokProxyCalculator:
         avg_comments = stats.get("avg_comments", 0)
         avg_shares = stats.get("avg_shares", 0)
 
-        # Calculate trend velocity from video posting frequency (NOT engagement)
+        # Calculate trend velocity from video posting frequency
         trend_velocity = self._calculate_posting_trend(videos)
-
-        # Determine trend direction
         trend = self._determine_trend(trend_velocity)
 
-        # Calculate proxy score based on DEMAND (views + video count)
-        proxy_score = self._calculate_demand_proxy(
+        # Calculate engagement score (NOT search volume)
+        engagement_score = self._calculate_engagement_score(
             hashtag_views=hashtag_views,
             video_count=video_count,
+            avg_likes=avg_likes,
+            avg_comments=avg_comments,
+            avg_shares=avg_shares,
         )
 
         return TikTokMetrics(
-            proxy_score=proxy_score,
+            # Use engagement_score, not proxy_score
+            engagement_score=engagement_score,
+            metric_type=MetricType.ENGAGEMENT,
             trend=trend,
             trend_velocity=trend_velocity,
             confidence=Confidence.PROXY,
@@ -88,38 +109,49 @@ class TikTokProxyCalculator:
             avg_comments=avg_comments,
             avg_shares=avg_shares,
             raw_data=raw_data,
+            metric_explanation=(
+                f"TikTok audience engagement: {hashtag_views:,} views across "
+                f"{video_count:,} videos. This shows content exposure, NOT search demand."
+            ),
         )
 
-    def _calculate_demand_proxy(
+    def _calculate_engagement_score(
         self,
         hashtag_views: int,
         video_count: int,
+        avg_likes: float,
+        avg_comments: float,
+        avg_shares: float,
     ) -> int:
         """
-        Calculate proxy score based on DEMAND metrics only.
+        Calculate engagement score from TikTok metrics.
 
-        This converts hashtag views and video counts into an estimated
-        monthly search volume equivalent.
+        This is an ENGAGEMENT metric showing audience interaction,
+        NOT a search volume estimate.
 
-        NOTE: We only sample ~20 videos, so we extrapolate to estimate
-        the full hashtag's demand.
+        Components:
+        - Views: Primary exposure metric (algorithm-driven)
+        - Video count: Content supply
+        - Avg engagement: Audience interaction quality
         """
-        # Extrapolate from sample to estimate full hashtag metrics
-        estimated_total_views = hashtag_views * self.SAMPLE_EXTRAPOLATION_FACTOR
-        estimated_total_videos = video_count * self.SAMPLE_EXTRAPOLATION_FACTOR
+        # Views component (scaled down for reasonable numbers)
+        views_component = hashtag_views * self.VIEWS_WEIGHT
 
-        # Primary signal: Estimated total views → monthly searches
-        # Convert views to search equivalent
-        views_as_searches = estimated_total_views * self.VIEWS_TO_SEARCHES_FACTOR
+        # Video count component
+        video_component = video_count * self.VIDEO_COUNT_WEIGHT
 
-        # Secondary signal: Estimated video count indicates content creator demand
-        video_count_signal = estimated_total_videos * self.VIDEO_COUNT_FACTOR
+        # Engagement quality multiplier (based on avg interactions)
+        avg_engagement = avg_likes + avg_comments + (avg_shares * 2)  # Shares weighted higher
+        engagement_multiplier = 1.0 + min(avg_engagement / 10000, 1.0)  # Max 2x multiplier
 
-        # Combined demand score
-        demand_score = views_as_searches + video_count_signal
+        # Combined engagement score
+        engagement_score = (views_component + video_component) * engagement_multiplier
 
         # Apply bounds
-        final_score = max(self.MIN_PROXY_SCORE, min(self.MAX_PROXY_SCORE, demand_score))
+        final_score = max(
+            self.MIN_ENGAGEMENT_SCORE,
+            min(self.MAX_ENGAGEMENT_SCORE, engagement_score)
+        )
 
         return int(final_score)
 
@@ -196,43 +228,48 @@ class TikTokProxyCalculator:
         return TrendDirection.STABLE
 
 
-class InstagramProxyCalculator:
+class InstagramEngagementCalculator:
     """
-    Converts Instagram hashtag metrics into a search-volume-like score.
+    Calculates Instagram ENGAGEMENT metrics from hashtag data.
 
-    Formula focuses on DEMAND signals (post counts), NOT engagement:
-    - post_count: Total posts using hashtag (all-time)
-    - daily_posts: Posts per day (primary demand signal)
+    IMPORTANT: This produces ENGAGEMENT scores, NOT search volume estimates.
 
-    The output represents estimated monthly searches/interest based on
-    hashtag post volume, calibrated to be comparable to Google search volume.
+    What we measure:
+    - post_count: Total posts using hashtag (content supply)
+    - daily_posts: Posts per day (creator activity)
+    - avg_likes, avg_comments: Audience interaction rates
+
+    What this tells you:
+    - "X posts exist with this hashtag, receiving Y average engagement"
+    - Community activity around this topic
+    - Creator interest in this topic
+
+    What this does NOT tell you:
+    - How many people actively search for this term on Instagram
+    - Direct user intent or demand
+
+    Instagram's Explore is algorithm-driven; users browse more than search.
+    High post counts ≠ high search demand. They are different metrics.
     """
 
-    # Calibration: Convert daily posts to monthly search estimate
-    # Calibrated against Keywordtool.io Instagram data
-    # "naturkosmetik" has ~130.9K search volume with ~956K total posts
-    # ~137 searches per 1000 posts = 0.137 ratio
-    # 100 daily posts ≈ 15,000 monthly searches
-    DAILY_POSTS_TO_SEARCHES = 150  # 1 daily post ≈ 150 monthly searches
+    # Scaling factors for engagement score calculation
+    # These normalize the score to a reasonable range
+    POST_COUNT_WEIGHT = 0.1  # 10K posts = 1000 engagement points
+    DAILY_POSTS_WEIGHT = 100  # 10 daily posts = 1000 engagement points
 
-    # Post count signal: Total posts indicates historical demand
-    # Calibrated: 956K posts ≈ 130.9K searches = ~0.137 ratio
-    # Increased from 0.01 to 0.137 for better calibration
-    POST_COUNT_FACTOR = 0.137
+    # Bounds
+    MIN_ENGAGEMENT_SCORE = 0
+    MAX_ENGAGEMENT_SCORE = 100_000_000
 
-    # Normalization bounds
-    MIN_PROXY_SCORE = 0
-    MAX_PROXY_SCORE = 10_000_000
-
-    def calculate(self, raw_data: dict[str, Any]) -> InstagramMetrics:
+    def calculate(self, raw_data: dict[str, Any]) -> "InstagramMetrics":
         """
-        Calculate Instagram proxy metrics from raw scraped data.
+        Calculate Instagram ENGAGEMENT metrics from raw scraped data.
 
         Args:
             raw_data: Raw data from Apify Instagram scraper
 
         Returns:
-            InstagramMetrics with calculated proxy score based on post counts
+            InstagramMetrics with engagement_score (NOT search volume)
         """
         stats = raw_data.get("stats", {})
         posts = raw_data.get("posts", [])
@@ -243,18 +280,22 @@ class InstagramProxyCalculator:
         avg_comments = stats.get("avg_comments", 0)
         related_hashtags = stats.get("related_hashtags", [])
 
-        # Calculate trend from posting FREQUENCY (not engagement)
+        # Calculate trend from posting frequency
         trend_velocity = self._calculate_posting_trend(posts)
         trend = self._determine_trend(trend_velocity)
 
-        # Calculate proxy score based on DEMAND (post counts only)
-        proxy_score = self._calculate_demand_proxy(
+        # Calculate engagement score (NOT search volume)
+        engagement_score = self._calculate_engagement_score(
             post_count=post_count,
             daily_posts=daily_posts,
+            avg_likes=avg_likes,
+            avg_comments=avg_comments,
         )
 
         return InstagramMetrics(
-            proxy_score=proxy_score,
+            # Use engagement_score, not proxy_score
+            engagement_score=engagement_score,
+            metric_type=MetricType.ENGAGEMENT,
             trend=trend,
             trend_velocity=trend_velocity,
             confidence=Confidence.PROXY,
@@ -266,30 +307,48 @@ class InstagramProxyCalculator:
             avg_comments=avg_comments,
             related_hashtags=related_hashtags,
             raw_data=raw_data,
+            metric_explanation=(
+                f"Instagram community engagement: {post_count:,} posts, "
+                f"~{daily_posts:,} posts/day. This shows creator activity, NOT search demand."
+            ),
         )
 
-    def _calculate_demand_proxy(
+    def _calculate_engagement_score(
         self,
         post_count: int,
         daily_posts: int,
+        avg_likes: float,
+        avg_comments: float,
     ) -> int:
         """
-        Calculate proxy score based on DEMAND metrics only.
+        Calculate engagement score from Instagram metrics.
 
-        This converts post counts into an estimated monthly search volume equivalent.
+        This is an ENGAGEMENT metric showing community activity,
+        NOT a search volume estimate.
+
+        Components:
+        - Post count: Content supply/creator activity
+        - Daily posts: Current activity level
+        - Avg engagement: Audience interaction quality
         """
-        # Primary signal: Daily posts → monthly searches
-        # Logic: Active posting = active interest/demand
-        daily_posts_signal = daily_posts * self.DAILY_POSTS_TO_SEARCHES
+        # Post count component (historical content supply)
+        post_component = post_count * self.POST_COUNT_WEIGHT
 
-        # Secondary signal: Total post count indicates historical demand
-        post_count_signal = post_count * self.POST_COUNT_FACTOR
+        # Daily posts component (current activity)
+        daily_component = daily_posts * self.DAILY_POSTS_WEIGHT
 
-        # Combined demand score
-        demand_score = daily_posts_signal + post_count_signal
+        # Engagement quality multiplier
+        avg_engagement = avg_likes + avg_comments
+        engagement_multiplier = 1.0 + min(avg_engagement / 5000, 1.0)  # Max 2x multiplier
+
+        # Combined engagement score
+        engagement_score = (post_component + daily_component) * engagement_multiplier
 
         # Apply bounds
-        final_score = max(self.MIN_PROXY_SCORE, min(self.MAX_PROXY_SCORE, demand_score))
+        final_score = max(
+            self.MIN_ENGAGEMENT_SCORE,
+            min(self.MAX_ENGAGEMENT_SCORE, engagement_score)
+        )
 
         return int(final_score)
 
@@ -401,10 +460,18 @@ class InstagramProxyCalculator:
         # Clamp velocity to reasonable bounds
         return max(0.3, min(3.0, velocity))
 
-    def _determine_trend(self, velocity: float) -> TrendDirection:
-        """Determine trend direction from velocity."""
+    def _determine_trend_instagram(self, velocity: float) -> TrendDirection:
+        """Determine trend direction from velocity (Instagram-specific)."""
         if velocity > 1.15:
             return TrendDirection.GROWING
         elif velocity < 0.85:
             return TrendDirection.DECLINING
         return TrendDirection.STABLE
+
+    # Alias for backward compatibility
+    _determine_trend = _determine_trend_instagram
+
+
+# Backward-compatible aliases (deprecated - use new class names)
+TikTokProxyCalculator = TikTokEngagementCalculator
+InstagramProxyCalculator = InstagramEngagementCalculator

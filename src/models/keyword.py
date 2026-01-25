@@ -26,9 +26,18 @@ class Competition(str, Enum):
 class Confidence(str, Enum):
     """Confidence level of the metrics."""
 
-    HIGH = "high"
-    MEDIUM = "medium"
-    PROXY = "proxy"
+    HIGH = "high"  # Direct API data (DataForSEO) - verified search volume
+    CALIBRATED = "calibrated"  # Proxy with regression model calibration
+    MEDIUM = "medium"  # Official API but not direct search volume
+    PROXY = "proxy"  # Engagement metrics, NOT search volume
+
+
+class MetricType(str, Enum):
+    """Type of metric being reported."""
+
+    SEARCH_VOLUME = "search_volume"  # Actual search volume (Google, YouTube, Amazon)
+    ENGAGEMENT = "engagement"  # Audience engagement metrics (TikTok, Instagram)
+    INTEREST_INDEX = "interest_index"  # Relative interest score (Pinterest)
 
 
 class Platform(str, Enum):
@@ -45,11 +54,26 @@ class Platform(str, Enum):
 class PlatformMetrics(BaseModel):
     """Base model for platform-specific keyword metrics."""
 
+    # Core metrics
     search_volume: int | None = Field(
-        default=None, description="Actual search volume (Google, YouTube, Amazon)"
+        default=None, description="Verified monthly search volume (Google, YouTube, Amazon only)"
     )
+    engagement_score: int | None = Field(
+        default=None, description="Audience engagement metric (TikTok, Instagram) - NOT search volume"
+    )
+    interest_score: int | None = Field(
+        default=None, description="Relative interest index 0-100 (Pinterest)"
+    )
+
+    # Legacy field for backward compatibility
     proxy_score: int | None = Field(
-        default=None, description="Calculated proxy score (TikTok, Instagram)"
+        default=None, description="[DEPRECATED] Use engagement_score instead"
+    )
+
+    # Metadata
+    metric_type: MetricType = Field(
+        default=MetricType.SEARCH_VOLUME,
+        description="Type of metric: search_volume, engagement, or interest_index"
     )
     trend: TrendDirection | None = Field(default=None, description="Trend direction")
     trend_velocity: float | None = Field(
@@ -57,17 +81,32 @@ class PlatformMetrics(BaseModel):
     )
     competition: Competition | None = Field(default=None, description="Competition level")
     cpc: float | None = Field(default=None, description="Cost per click (where available)")
-    confidence: Confidence = Field(default=Confidence.HIGH, description="Confidence level")
+    confidence: Confidence = Field(default=Confidence.HIGH, description="Data confidence level")
     source: str = Field(description="API source name")
     raw_data: dict[str, Any] | None = Field(
         default=None, description="Original API response data"
     )
     collected_at: datetime = Field(default_factory=datetime.utcnow)
 
+    # Human-readable explanation
+    metric_explanation: str | None = Field(
+        default=None, description="Human-readable explanation of what this metric represents"
+    )
+
     @property
     def effective_volume(self) -> int:
-        """Get the effective volume (search_volume or proxy_score)."""
-        return self.search_volume or self.proxy_score or 0
+        """Get the effective volume based on metric type."""
+        if self.metric_type == MetricType.SEARCH_VOLUME:
+            return self.search_volume or 0
+        elif self.metric_type == MetricType.ENGAGEMENT:
+            return self.engagement_score or self.proxy_score or 0
+        else:  # INTEREST_INDEX
+            return self.interest_score or 0
+
+    @property
+    def is_verified_search_data(self) -> bool:
+        """Returns True if this is verified search volume data."""
+        return self.metric_type == MetricType.SEARCH_VOLUME and self.confidence == Confidence.HIGH
 
 
 class MonthlySearchData(BaseModel):
@@ -129,15 +168,33 @@ class AmazonMetrics(PlatformMetrics):
 
 
 class TikTokMetrics(PlatformMetrics):
-    """TikTok-specific hashtag metrics from Apify."""
+    """
+    TikTok-specific engagement metrics from Apify.
+
+    IMPORTANT: These are ENGAGEMENT metrics, NOT search volume.
+    TikTok does not expose search volume data publicly.
+
+    What this measures:
+    - How much content exists about this topic
+    - How much audience engagement that content receives
+    - Creator activity around this keyword/hashtag
+
+    What this does NOT measure:
+    - How many people search for this term on TikTok
+    - Direct demand/intent (algorithm pushes content, not user searches)
+    """
 
     source: str = "apify_tiktok"
+    metric_type: MetricType = MetricType.ENGAGEMENT
     confidence: Confidence = Confidence.PROXY
+    metric_explanation: str = "Audience engagement metrics - NOT search volume. Shows content views and interactions."
+
+    # Engagement metrics
     hashtag_views: int | None = Field(
-        default=None, description="Total hashtag views (all-time)"
+        default=None, description="Total views on content with this hashtag (engagement, not searches)"
     )
     video_count: int | None = Field(
-        default=None, description="Number of videos using hashtag"
+        default=None, description="Number of videos using hashtag (creator activity)"
     )
     avg_likes: float | None = Field(default=None, description="Average likes per video")
     avg_comments: float | None = Field(default=None, description="Average comments per video")
@@ -145,26 +202,52 @@ class TikTokMetrics(PlatformMetrics):
 
     @property
     def avg_engagement(self) -> float:
-        """Calculate total average engagement."""
+        """Calculate total average engagement per video."""
         likes = self.avg_likes or 0
         comments = self.avg_comments or 0
         shares = self.avg_shares or 0
         return likes + comments + shares
 
+    @property
+    def total_engagement(self) -> int:
+        """Calculate total engagement (views + interactions)."""
+        views = self.hashtag_views or 0
+        video_count = self.video_count or 0
+        avg_eng = self.avg_engagement
+        return views + int(video_count * avg_eng)
+
 
 class InstagramMetrics(PlatformMetrics):
-    """Instagram-specific hashtag metrics from Apify."""
+    """
+    Instagram-specific engagement metrics from Apify.
+
+    IMPORTANT: These are ENGAGEMENT metrics, NOT search volume.
+    Instagram does not expose search volume data publicly.
+
+    What this measures:
+    - Content creation activity (how many posts use this hashtag)
+    - Community engagement (likes, comments)
+    - Topic popularity among creators
+
+    What this does NOT measure:
+    - How many people search for this term on Instagram
+    - Direct user intent or demand
+    """
 
     source: str = "apify_instagram"
+    metric_type: MetricType = MetricType.ENGAGEMENT
     confidence: Confidence = Confidence.PROXY
+    metric_explanation: str = "Community engagement metrics - NOT search volume. Shows posting activity and interactions."
+
+    # Engagement metrics
     post_count: int | None = Field(
-        default=None, description="Total posts with hashtag (all-time)"
+        default=None, description="Total posts with hashtag (creator activity, not searches)"
     )
     daily_posts: int | None = Field(
-        default=None, description="Average posts per day"
+        default=None, description="Average posts per day (content velocity)"
     )
     avg_engagement: float | None = Field(
-        default=None, description="Average engagement per post"
+        default=None, description="Average engagement per post (likes + comments)"
     )
     avg_likes: float | None = Field(default=None, description="Average likes per post")
     avg_comments: float | None = Field(default=None, description="Average comments per post")
@@ -172,27 +255,57 @@ class InstagramMetrics(PlatformMetrics):
         default=None, description="Related/suggested hashtags"
     )
 
+    @property
+    def total_engagement(self) -> int:
+        """Calculate total daily engagement."""
+        daily = self.daily_posts or 0
+        avg_eng = self.avg_engagement or 0
+        return int(daily * avg_eng)
+
 
 class PinterestMetrics(PlatformMetrics):
-    """Pinterest-specific metrics from Pinterest Trends."""
+    """
+    Pinterest-specific metrics from Pinterest Trends.
+
+    NOTE: Pinterest provides a relative interest index (0-100), not absolute search volume.
+    The interest_score shows relative popularity compared to other terms on Pinterest.
+
+    What this measures:
+    - Relative topic interest on Pinterest (0-100 scale)
+    - Pin creation activity
+    - Trend direction
+
+    For more accurate data, Pinterest Ads API can provide search volume ranges
+    (requires Pinterest Business account).
+    """
 
     source: str = "pinterest_trends"
+    metric_type: MetricType = MetricType.INTEREST_INDEX
     confidence: Confidence = Confidence.PROXY
-    interest_score: int | None = Field(
-        default=None, description="Pinterest interest score (0-100)"
+    metric_explanation: str = "Relative interest index (0-100) - shows popularity compared to other Pinterest topics."
+
+    # Interest metrics (not absolute volume)
+    pinterest_interest_score: int | None = Field(
+        default=None, description="Pinterest interest index (0-100, relative not absolute)"
     )
     pin_count: int | None = Field(
-        default=None, description="Number of pins for this term"
+        default=None, description="Number of pins for this term (content supply)"
     )
     monthly_searches_estimate: int | None = Field(
-        default=None, description="Estimated monthly searches"
+        default=None, description="Rough estimate based on interest score - use with caution"
     )
     is_trending: bool = Field(
-        default=False, description="Whether the term is currently trending"
+        default=False, description="Whether the term is currently trending on Pinterest"
     )
     related_terms: list[str] | None = Field(
         default=None, description="Related search terms"
     )
+
+    # Override the base interest_score to use pinterest_interest_score
+    @property
+    def interest_score(self) -> int | None:
+        """Get the interest score."""
+        return self.pinterest_interest_score
 
 
 class PlatformScore(BaseModel):
@@ -268,16 +381,32 @@ class UnifiedKeywordData(BaseModel):
             "cross_platform_trend": self.cross_platform_trend.value,
             "best_platform": self.best_platform.value if self.best_platform else None,
             "platforms": {},
+            "search_demand": {},  # Verified search volume platforms
+            "engagement_metrics": {},  # Engagement/interest platforms
             "collected_at": self.timestamp.isoformat(),
         }
 
         for platform, metrics in self.platforms_dict.items():
             if metrics:
-                doc["platforms"][platform.value] = {
-                    "volume": metrics.effective_volume,
+                platform_data = {
+                    "value": metrics.effective_volume,
+                    "metric_type": metrics.metric_type.value,
                     "trend": metrics.trend.value if metrics.trend else None,
                     "competition": metrics.competition.value if metrics.competition else None,
                     "confidence": metrics.confidence.value,
+                    "is_verified_search": metrics.is_verified_search_data,
+                    "explanation": metrics.metric_explanation,
                 }
+                doc["platforms"][platform.value] = platform_data
+
+                # Categorize by metric type for easier consumption
+                if metrics.metric_type == MetricType.SEARCH_VOLUME:
+                    doc["search_demand"][platform.value] = metrics.effective_volume
+                else:
+                    doc["engagement_metrics"][platform.value] = metrics.effective_volume
+
+        # Calculate totals
+        doc["total_verified_search_volume"] = sum(doc["search_demand"].values())
+        doc["total_engagement_score"] = sum(doc["engagement_metrics"].values())
 
         return doc
