@@ -1,49 +1,50 @@
 {
   "version": 2,
-  "redirects": [
+  "builds": [
     {
-      "source": "/",
-      "destination": "/home",
-      "permanent": false
+      "src": "api/main.py",
+      "use": "@vercel/python",
+      "config": {
+        "maxLambdaSize": "50mb"
+      }
     }
   ],
-  "rewrites": [
+  "routes": [
     {
-      "source": "/api/:path*",
-      "destination": "/api/main.py"
+      "src": "^/$",
+      "dest": "/home"
     },
     {
-      "source": "/home",
-      "destination": "/api/main.py"
+      "src": "^/home$",
+      "dest": "/api/main.py"
     },
     {
-      "source": "/brand",
-      "destination": "/api/main.py"
+      "src": "^/brand$",
+      "dest": "/api/main.py"
     },
     {
-      "source": "/demand",
-      "destination": "/api/main.py"
+      "src": "^/demand$",
+      "dest": "/api/main.py"
     },
     {
-      "source": "/compare",
-      "destination": "/api/main.py"
+      "src": "^/compare$",
+      "dest": "/api/main.py"
     },
     {
-      "source": "/debug",
-      "destination": "/api/main.py"
+      "src": "^/debug$",
+      "dest": "/api/main.py"
     },
     {
-      "source": "/test-template",
-      "destination": "/api/main.py"
+      "src": "^/test-template$",
+      "dest": "/api/main.py"
     },
     {
-      "source": "/test-simple-dashboard",
-      "destination": "/api/main.py"
+      "src": "^/test-simple-dashboard$",
+      "dest": "/api/main.py"
+    },
+    {
+      "src": "^/api/(.*)$",
+      "dest": "/api/main.py"
     }
-  ],
-  "functions": {
-    "api/*.py": {
-      "maxDuration": 60
-    }
-  }
+  ]
 }
