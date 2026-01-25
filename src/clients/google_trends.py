@@ -46,12 +46,12 @@ class GoogleTrendsClient:
     def pytrends(self) -> TrendReq:
         """Get or create the pytrends client."""
         if self._pytrends is None:
+            # Note: retries parameter removed due to urllib3 2.x compatibility issue
+            # pytrends uses deprecated 'method_whitelist' which is not supported
             self._pytrends = TrendReq(
                 hl="en-US",
                 tz=360,
                 timeout=(10, 25),
-                retries=2,
-                backoff_factor=0.1,
             )
         return self._pytrends
 
@@ -306,6 +306,272 @@ class GoogleTrendsClient:
             return trend, round(velocity, 2)
 
         return TrendDirection.STABLE, 1.0
+
+    async def get_trends_intelligence(
+        self,
+        keywords: list[str],
+        timeframe: str = "today 12-m",
+        geo: str = "",
+    ) -> dict[str, Any]:
+        """
+        Get comprehensive Google Trends intelligence for keywords.
+
+        Returns:
+        - Interest over time (12-month trend chart data)
+        - Interest by region (geographic hotspots)
+        - Related queries (rising and top queries)
+        - Seasonality analysis
+
+        Args:
+            keywords: Keywords to analyze (max 5)
+            timeframe: Google Trends timeframe
+            geo: Geographic location (empty = worldwide)
+
+        Returns:
+            Dictionary with trends intelligence data
+        """
+        # Limit to 5 keywords (Google Trends limit)
+        keywords = keywords[:5]
+
+        try:
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(
+                None,
+                self._sync_get_trends_intelligence,
+                keywords,
+                timeframe,
+                geo,
+            )
+            return data
+        except Exception as e:
+            logger.error(f"Failed to get trends intelligence: {e}")
+            return {
+                "error": str(e),
+                "keywords": keywords,
+                "interest_over_time": [],
+                "interest_by_region": [],
+                "related_queries": {},
+                "seasonality": None,
+            }
+
+    def _sync_get_trends_intelligence(
+        self,
+        keywords: list[str],
+        timeframe: str,
+        geo: str,
+    ) -> dict[str, Any]:
+        """Synchronous method to fetch comprehensive trends data."""
+        result: dict[str, Any] = {
+            "keywords": keywords,
+            "timeframe": timeframe,
+            "geo": geo or "Worldwide",
+            "interest_over_time": [],
+            "interest_by_region": [],
+            "related_queries": {},
+            "rising_queries": [],
+            "seasonality": None,
+        }
+
+        try:
+            # Build payload for web search (not YouTube)
+            self.pytrends.build_payload(
+                keywords,
+                cat=0,
+                timeframe=timeframe,
+                geo=geo if geo else "",
+            )
+
+            # 1. Interest Over Time
+            try:
+                interest_df = self.pytrends.interest_over_time()
+                if not interest_df.empty:
+                    time_series = []
+                    for date, row in interest_df.iterrows():
+                        dt = date.to_pydatetime() if hasattr(date, "to_pydatetime") else date
+                        entry = {"date": dt.strftime("%Y-%m-%d")}
+                        for kw in keywords:
+                            if kw in row:
+                                entry[kw] = int(row[kw])
+                        time_series.append(entry)
+                    result["interest_over_time"] = time_series
+
+                    # Calculate seasonality
+                    result["seasonality"] = self._analyze_seasonality(interest_df, keywords)
+            except Exception as e:
+                logger.warning(f"Failed to get interest over time: {e}")
+
+            # 2. Interest By Region
+            try:
+                region_df = self.pytrends.interest_by_region(
+                    resolution="COUNTRY",
+                    inc_low_vol=True,
+                    inc_geo_code=True,
+                )
+                if not region_df.empty:
+                    regions = []
+                    # Get top 10 regions by first keyword
+                    primary_kw = keywords[0] if keywords else None
+                    if primary_kw and primary_kw in region_df.columns:
+                        sorted_df = region_df.sort_values(by=primary_kw, ascending=False).head(10)
+                        for idx, row in sorted_df.iterrows():
+                            region_entry = {"region": idx}
+                            for kw in keywords:
+                                if kw in row:
+                                    region_entry[kw] = int(row[kw])
+                            regions.append(region_entry)
+                    result["interest_by_region"] = regions
+            except Exception as e:
+                logger.warning(f"Failed to get interest by region: {e}")
+
+            # 3. Related Queries
+            try:
+                related = self.pytrends.related_queries()
+                if related:
+                    for kw in keywords:
+                        if kw in related and related[kw]:
+                            kw_related = {}
+
+                            # Top queries
+                            top_df = related[kw].get("top")
+                            if top_df is not None and not top_df.empty:
+                                kw_related["top"] = top_df.head(10).to_dict("records")
+
+                            # Rising queries (these are the gold!)
+                            rising_df = related[kw].get("rising")
+                            if rising_df is not None and not rising_df.empty:
+                                rising_list = rising_df.head(10).to_dict("records")
+                                kw_related["rising"] = rising_list
+
+                                # Add to overall rising queries list
+                                for q in rising_list:
+                                    q["source_keyword"] = kw
+                                    result["rising_queries"].append(q)
+
+                            result["related_queries"][kw] = kw_related
+            except Exception as e:
+                logger.warning(f"Failed to get related queries: {e}")
+
+            # Sort rising queries by value (growth rate)
+            result["rising_queries"] = sorted(
+                result["rising_queries"],
+                key=lambda x: self._parse_rising_value(x.get("value", 0)),
+                reverse=True,
+            )[:15]  # Top 15 rising queries
+
+        except Exception as e:
+            logger.error(f"Error fetching trends intelligence: {e}")
+            result["error"] = str(e)
+
+        return result
+
+    def _parse_rising_value(self, value: Any) -> int:
+        """Parse rising query value (can be 'Breakout' or a number)."""
+        if value == "Breakout":
+            return 10000  # Very high priority
+        try:
+            return int(str(value).replace("%", "").replace("+", "").replace(",", ""))
+        except (ValueError, TypeError):
+            return 0
+
+    def _analyze_seasonality(
+        self,
+        interest_df: Any,
+        keywords: list[str],
+    ) -> dict[str, Any] | None:
+        """Analyze seasonality patterns in the interest data."""
+        if interest_df.empty or not keywords:
+            return None
+
+        try:
+            primary_kw = keywords[0]
+            if primary_kw not in interest_df.columns:
+                return None
+
+            series = interest_df[primary_kw]
+
+            # Group by month to find seasonal patterns
+            monthly_avg: dict[int, list[int]] = {}
+            for date, value in series.items():
+                month = date.month
+                if month not in monthly_avg:
+                    monthly_avg[month] = []
+                monthly_avg[month].append(int(value))
+
+            # Calculate average interest per month
+            month_averages = {
+                month: sum(values) / len(values)
+                for month, values in monthly_avg.items()
+            }
+
+            if not month_averages:
+                return None
+
+            # Find peak and low months
+            peak_month = max(month_averages, key=month_averages.get)
+            low_month = min(month_averages, key=month_averages.get)
+
+            month_names = [
+                "", "January", "February", "March", "April", "May", "June",
+                "July", "August", "September", "October", "November", "December"
+            ]
+
+            # Calculate seasonality strength (variance)
+            avg_interest = sum(month_averages.values()) / len(month_averages)
+            variance = sum((v - avg_interest) ** 2 for v in month_averages.values()) / len(month_averages)
+            seasonality_strength = "high" if variance > 200 else "medium" if variance > 50 else "low"
+
+            return {
+                "peak_month": month_names[peak_month],
+                "peak_month_num": peak_month,
+                "peak_interest": round(month_averages[peak_month], 1),
+                "low_month": month_names[low_month],
+                "low_month_num": low_month,
+                "low_interest": round(month_averages[low_month], 1),
+                "seasonality_strength": seasonality_strength,
+                "monthly_averages": {
+                    month_names[m]: round(v, 1)
+                    for m, v in sorted(month_averages.items())
+                },
+            }
+
+        except Exception as e:
+            logger.warning(f"Failed to analyze seasonality: {e}")
+            return None
+
+    async def get_trending_searches(
+        self,
+        country: str = "united_states",
+    ) -> list[dict[str, Any]]:
+        """
+        Get currently trending searches for a country.
+
+        Args:
+            country: Country name (e.g., 'united_states', 'germany', 'japan')
+
+        Returns:
+            List of trending search terms
+        """
+        try:
+            loop = asyncio.get_event_loop()
+            trending = await loop.run_in_executor(
+                None,
+                self._sync_get_trending_searches,
+                country,
+            )
+            return trending
+        except Exception as e:
+            logger.error(f"Failed to get trending searches: {e}")
+            return []
+
+    def _sync_get_trending_searches(self, country: str) -> list[dict[str, Any]]:
+        """Synchronous method to get trending searches."""
+        try:
+            trending_df = self.pytrends.trending_searches(pn=country)
+            if trending_df is not None and not trending_df.empty:
+                return [{"query": str(q), "rank": i + 1} for i, q in enumerate(trending_df[0].tolist()[:20])]
+        except Exception as e:
+            logger.warning(f"Failed to fetch trending searches: {e}")
+        return []
 
     async def close(self) -> None:
         """Close the client."""

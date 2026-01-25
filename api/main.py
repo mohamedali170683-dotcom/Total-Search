@@ -1775,6 +1775,209 @@ def _generate_competitive_insights(brand: dict, competitor: dict) -> list[dict]:
 
 
 # =============================================================================
+# Google Trends Intelligence API
+# =============================================================================
+
+@app.get("/api/trends/intelligence")
+async def get_trends_intelligence(
+    keywords: str = Query(..., description="Comma-separated keywords (max 5)"),
+    country: str = Query(default="", description="Country code (e.g., US, DE, UK) or empty for worldwide"),
+    timeframe: str = Query(default="today 12-m", description="Timeframe (today 12-m, today 3-m, today 1-m)"),
+):
+    """
+    Get comprehensive Google Trends intelligence for keywords.
+
+    Returns:
+    - 12-month interest trend chart data
+    - Geographic hotspots (top 10 countries)
+    - Rising queries (emerging search terms)
+    - Top related queries
+    - Seasonality analysis
+
+    This is valuable for:
+    - Understanding when demand peaks (timing campaigns)
+    - Finding geographic markets to target
+    - Discovering related keyword opportunities
+    - Identifying emerging trends early
+    """
+    try:
+        from src.clients.google_trends import GoogleTrendsClient
+
+        keyword_list = [k.strip() for k in keywords.split(",") if k.strip()][:5]
+
+        if not keyword_list:
+            raise HTTPException(status_code=400, detail="At least one keyword is required")
+
+        settings = get_settings()
+
+        # Map common country codes
+        geo_map = {
+            "us": "US", "de": "DE", "uk": "GB", "gb": "GB",
+            "fr": "FR", "es": "ES", "it": "IT", "nl": "NL",
+            "au": "AU", "ca": "CA", "br": "BR", "mx": "MX", "jp": "JP",
+        }
+        geo = geo_map.get(country.lower(), country.upper()) if country else ""
+
+        async with GoogleTrendsClient(settings=settings) as client:
+            data = await client.get_trends_intelligence(
+                keywords=keyword_list,
+                timeframe=timeframe,
+                geo=geo,
+            )
+
+        # Enrich with insights
+        insights = _generate_trends_insights(data)
+
+        return {
+            "keywords": keyword_list,
+            "country": geo or "Worldwide",
+            "timeframe": timeframe,
+            "interest_over_time": data.get("interest_over_time", []),
+            "interest_by_region": data.get("interest_by_region", []),
+            "related_queries": data.get("related_queries", {}),
+            "rising_queries": data.get("rising_queries", []),
+            "seasonality": data.get("seasonality"),
+            "insights": insights,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get trends intelligence: {str(e)}\n{traceback.format_exc()}"
+        )
+
+
+@app.get("/api/trends/daily")
+async def get_daily_trending_searches(
+    country: str = Query(default="united_states", description="Country (e.g., united_states, germany, japan)"),
+):
+    """
+    Get today's trending searches for a country.
+
+    Shows what's currently trending on Google in the selected country.
+    Useful for identifying newsjacking opportunities and timely content.
+    """
+    try:
+        from src.clients.google_trends import GoogleTrendsClient
+
+        settings = get_settings()
+
+        async with GoogleTrendsClient(settings=settings) as client:
+            trending = await client.get_trending_searches(country=country)
+
+        return {
+            "country": country,
+            "trending_searches": trending,
+            "count": len(trending),
+        }
+
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get trending searches: {str(e)}"
+        )
+
+
+def _generate_trends_insights(data: dict) -> list[dict]:
+    """Generate actionable insights from Google Trends data."""
+    insights = []
+
+    # Seasonality insight
+    seasonality = data.get("seasonality")
+    if seasonality:
+        if seasonality.get("seasonality_strength") in ["high", "medium"]:
+            insights.append({
+                "type": "seasonality",
+                "title": f"Peak interest in {seasonality.get('peak_month', 'N/A')}",
+                "description": f"Search interest peaks in {seasonality.get('peak_month')} "
+                              f"(index: {seasonality.get('peak_interest', 0)}) and is lowest in "
+                              f"{seasonality.get('low_month')} (index: {seasonality.get('low_interest', 0)}). "
+                              f"Plan campaigns around peak periods.",
+                "priority": "high",
+                "icon": "fa-calendar-alt",
+            })
+
+    # Rising queries insight
+    rising = data.get("rising_queries", [])
+    breakout_queries = [q for q in rising if q.get("value") == "Breakout"]
+    if breakout_queries:
+        query_list = ", ".join([q.get("query", "") for q in breakout_queries[:3]])
+        insights.append({
+            "type": "breakout",
+            "title": f"{len(breakout_queries)} breakout queries detected",
+            "description": f"These emerging searches have >5000% growth: {query_list}. "
+                          f"Consider creating content around these topics.",
+            "priority": "high",
+            "icon": "fa-rocket",
+        })
+    elif rising:
+        top_rising = rising[0] if rising else {}
+        insights.append({
+            "type": "rising",
+            "title": "Rising search terms identified",
+            "description": f"Top rising query: '{top_rising.get('query', 'N/A')}' "
+                          f"with {top_rising.get('value', 'N/A')}% growth. "
+                          f"These represent emerging opportunities.",
+            "priority": "medium",
+            "icon": "fa-arrow-trend-up",
+        })
+
+    # Geographic insight
+    regions = data.get("interest_by_region", [])
+    if regions and len(regions) >= 2:
+        top_region = regions[0].get("region", "N/A")
+        # Get interest value for first keyword
+        first_kw = data.get("keywords", [""])[0]
+        top_interest = regions[0].get(first_kw, 0) if first_kw else 0
+
+        insights.append({
+            "type": "geographic",
+            "title": f"Highest interest in {top_region}",
+            "description": f"{top_region} shows the strongest interest (index: {top_interest}). "
+                          f"Consider localizing content and ads for this market.",
+            "priority": "medium",
+            "icon": "fa-globe",
+        })
+
+    # Trend direction insight
+    time_series = data.get("interest_over_time", [])
+    if len(time_series) >= 6:
+        first_kw = data.get("keywords", [""])[0]
+        if first_kw:
+            recent = [t.get(first_kw, 0) for t in time_series[-3:]]
+            older = [t.get(first_kw, 0) for t in time_series[-6:-3]]
+
+            recent_avg = sum(recent) / len(recent) if recent else 0
+            older_avg = sum(older) / len(older) if older else 0
+
+            if older_avg > 0:
+                change = ((recent_avg - older_avg) / older_avg) * 100
+                if change > 15:
+                    insights.append({
+                        "type": "trend_up",
+                        "title": f"Interest growing +{change:.0f}%",
+                        "description": "Search interest has increased in recent months. "
+                                      "This indicates growing demand - good time to invest.",
+                        "priority": "high",
+                        "icon": "fa-chart-line",
+                    })
+                elif change < -15:
+                    insights.append({
+                        "type": "trend_down",
+                        "title": f"Interest declining {change:.0f}%",
+                        "description": "Search interest has decreased recently. "
+                                      "Consider pivoting strategy or targeting different keywords.",
+                        "priority": "medium",
+                        "icon": "fa-chart-line-down",
+                    })
+
+    return insights[:5]  # Limit to 5 insights
+
+
+# =============================================================================
 # Historical Data & Trending API Endpoints
 # =============================================================================
 
