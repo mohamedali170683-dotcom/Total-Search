@@ -11,39 +11,7 @@
   ],
   "routes": [
     {
-      "src": "^/$",
-      "dest": "/home"
-    },
-    {
-      "src": "^/home$",
-      "dest": "/api/main.py"
-    },
-    {
-      "src": "^/brand$",
-      "dest": "/api/main.py"
-    },
-    {
-      "src": "^/demand$",
-      "dest": "/api/main.py"
-    },
-    {
-      "src": "^/compare$",
-      "dest": "/api/main.py"
-    },
-    {
-      "src": "^/debug$",
-      "dest": "/api/main.py"
-    },
-    {
-      "src": "^/test-template$",
-      "dest": "/api/main.py"
-    },
-    {
-      "src": "^/test-simple-dashboard$",
-      "dest": "/api/main.py"
-    },
-    {
-      "src": "^/api/(.*)$",
+      "src": "/(.*)",
       "dest": "/api/main.py"
     }
   ]
