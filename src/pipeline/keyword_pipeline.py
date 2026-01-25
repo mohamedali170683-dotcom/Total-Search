@@ -67,6 +67,16 @@ class PipelineOptions(BaseModel):
         description="Number of Instagram posts to scrape per hashtag",
     )
 
+    # Localization options
+    location_code: int = Field(
+        default=2840,
+        description="DataForSEO location code (e.g., 2840 for US, 2276 for Germany)",
+    )
+    language_code: str = Field(
+        default="en",
+        description="Language code (e.g., en, de, fr, es)",
+    )
+
     # Error handling
     continue_on_error: bool = Field(
         default=True,
@@ -241,10 +251,10 @@ class KeywordPipeline:
         tasks = []
 
         if Platform.GOOGLE in options.platforms:
-            tasks.append(self._fetch_google_data(keywords, keyword_data))
+            tasks.append(self._fetch_google_data(keywords, keyword_data, options))
 
         if Platform.YOUTUBE in options.platforms:
-            tasks.append(self._fetch_youtube_data(keywords, keyword_data))
+            tasks.append(self._fetch_youtube_data(keywords, keyword_data, options))
 
         if Platform.AMAZON in options.platforms:
             tasks.append(self._fetch_amazon_data(keywords, keyword_data))
@@ -268,10 +278,10 @@ class KeywordPipeline:
     ) -> None:
         """Fetch data from all platforms sequentially."""
         if Platform.GOOGLE in options.platforms:
-            await self._fetch_google_data(keywords, keyword_data)
+            await self._fetch_google_data(keywords, keyword_data, options)
 
         if Platform.YOUTUBE in options.platforms:
-            await self._fetch_youtube_data(keywords, keyword_data)
+            await self._fetch_youtube_data(keywords, keyword_data, options)
 
         if Platform.AMAZON in options.platforms:
             await self._fetch_amazon_data(keywords, keyword_data)
@@ -289,11 +299,16 @@ class KeywordPipeline:
         self,
         keywords: list[str],
         keyword_data: dict[str, UnifiedKeywordData],
+        options: PipelineOptions,
     ) -> None:
         """Fetch Google search volume data."""
         try:
-            logger.debug(f"Fetching Google data for {len(keywords)} keywords")
-            metrics = await self.dataforseo.get_google_search_volume(keywords)
+            logger.debug(f"Fetching Google data for {len(keywords)} keywords (location: {options.location_code}, language: {options.language_code})")
+            metrics = await self.dataforseo.get_google_search_volume(
+                keywords,
+                location_code=options.location_code,
+                language_code=options.language_code,
+            )
 
             for kw, metric in zip(keywords, metrics):
                 keyword_data[kw].google = metric
@@ -308,11 +323,29 @@ class KeywordPipeline:
         self,
         keywords: list[str],
         keyword_data: dict[str, UnifiedKeywordData],
+        options: PipelineOptions,
     ) -> None:
         """Fetch YouTube search volume data using Google Trends."""
         try:
-            logger.debug(f"Fetching YouTube data via Google Trends for {len(keywords)} keywords")
-            metrics = await self.google_trends.get_youtube_search_volume(keywords)
+            # Map location code to geo code for Google Trends
+            geo_map = {
+                2840: "US",    # United States
+                2276: "DE",    # Germany
+                2826: "GB",    # United Kingdom
+                2250: "FR",    # France
+                2724: "ES",    # Spain
+                2380: "IT",    # Italy
+                2528: "NL",    # Netherlands
+                2036: "AU",    # Australia
+                2124: "CA",    # Canada
+                2076: "BR",    # Brazil
+                2484: "MX",    # Mexico
+                2392: "JP",    # Japan
+            }
+            geo = geo_map.get(options.location_code, "US")
+
+            logger.debug(f"Fetching YouTube data via Google Trends for {len(keywords)} keywords (geo: {geo})")
+            metrics = await self.google_trends.get_youtube_search_volume(keywords, geo=geo)
 
             for kw, metric in zip(keywords, metrics):
                 keyword_data[kw].youtube = metric

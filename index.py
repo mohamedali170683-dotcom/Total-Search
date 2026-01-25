@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Any
 
 # Add project root to path for Vercel serverless functions
+# index.py is at project root, so parent.resolve() is the project root
 project_root = Path(__file__).parent.resolve()
 sys.path.insert(0, str(project_root))
 
@@ -1160,6 +1161,8 @@ class DemandAnalysisRequest(BaseModel):
 async def analyze_demand_distribution(
     keywords: str = Query(..., description="Comma-separated keywords to analyze"),
     refresh: bool = Query(default=False, description="Force refresh data from APIs"),
+    country: str = Query(default="us", description="Country code (e.g., us, de, uk, fr)"),
+    language: str = Query(default="en", description="Language code (e.g., en, de, fr, es)"),
 ):
     """
     Analyze demand distribution across all platforms for given keywords.
@@ -1215,7 +1218,7 @@ async def analyze_demand_distribution(
 
         # Fetch data for keywords we don't have
         if keywords_to_fetch:
-            fetched_data = await _fetch_demand_data(keywords_to_fetch)
+            fetched_data = await _fetch_demand_data(keywords_to_fetch, country=country, language=language)
             results.update(fetched_data)
 
         # Calculate demand distribution
@@ -1285,15 +1288,41 @@ async def compare_demand(
         raise HTTPException(status_code=500, detail=f"Comparison failed: {str(e)}")
 
 
-async def _fetch_demand_data(keywords: list[str]) -> dict:
-    """Fetch demand data from all platforms for keywords."""
+async def _fetch_demand_data(keywords: list[str], country: str = "us", language: str = "en") -> dict:
+    """Fetch demand data from all platforms for keywords.
+
+    Args:
+        keywords: List of keywords to research
+        country: Country code (e.g., us, de, uk, fr, es, it, nl, au, ca, br, mx, jp)
+        language: Language code (e.g., en, de, fr, es, it, nl, pt, ja)
+    """
     settings = get_settings()
+
+    # Map country codes to DataForSEO location codes
+    country_location_map = {
+        "us": 2840,    # United States
+        "de": 2276,    # Germany
+        "uk": 2826,    # United Kingdom
+        "gb": 2826,    # United Kingdom (alternate)
+        "fr": 2250,    # France
+        "es": 2724,    # Spain
+        "it": 2380,    # Italy
+        "nl": 2528,    # Netherlands
+        "au": 2036,    # Australia
+        "ca": 2124,    # Canada
+        "br": 2076,    # Brazil
+        "mx": 2484,    # Mexico
+        "jp": 2392,    # Japan
+    }
 
     # Use all 6 platforms
     all_platforms = [
         Platform.GOOGLE, Platform.YOUTUBE, Platform.AMAZON,
         Platform.TIKTOK, Platform.INSTAGRAM, Platform.PINTEREST
     ]
+
+    # Get location code for the country
+    location_code = country_location_map.get(country.lower(), 2840)  # Default to US
 
     options = PipelineOptions(
         platforms=all_platforms,
@@ -1302,6 +1331,8 @@ async def _fetch_demand_data(keywords: list[str]) -> dict:
         save_checkpoints=False,
         tiktok_results_per_hashtag=10,
         instagram_results_per_hashtag=10,
+        location_code=location_code,
+        language_code=language.lower(),
     )
 
     results = {}

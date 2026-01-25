@@ -58,6 +58,7 @@ class GoogleTrendsClient:
         self,
         keywords: list[str],
         timeframe: str = "today 12-m",
+        geo: str = "US",
     ) -> list[YouTubeMetrics]:
         """
         Get YouTube search volume estimates from Google Trends.
@@ -65,6 +66,7 @@ class GoogleTrendsClient:
         Args:
             keywords: List of keywords to analyze
             timeframe: Google Trends timeframe (default: last 12 months)
+            geo: Geographic location code (default: US)
 
         Returns:
             List of YouTubeMetrics objects with estimated search volume
@@ -75,7 +77,7 @@ class GoogleTrendsClient:
         batch_size = 5
         for i in range(0, len(keywords), batch_size):
             batch = keywords[i : i + batch_size]
-            batch_results = await self._fetch_youtube_trends_batch(batch, timeframe)
+            batch_results = await self._fetch_youtube_trends_batch(batch, timeframe, geo)
             results.extend(batch_results)
 
             # Small delay to avoid rate limiting
@@ -88,6 +90,7 @@ class GoogleTrendsClient:
         self,
         keywords: list[str],
         timeframe: str,
+        geo: str = "US",
     ) -> list[YouTubeMetrics]:
         """Fetch YouTube trends for a batch of keywords."""
         metrics_list: list[YouTubeMetrics] = []
@@ -100,6 +103,7 @@ class GoogleTrendsClient:
                 self._sync_fetch_youtube_trends,
                 keywords,
                 timeframe,
+                geo,
             )
 
             for keyword in keywords:
@@ -142,6 +146,7 @@ class GoogleTrendsClient:
         self,
         keywords: list[str],
         timeframe: str,
+        geo: str = "US",
     ) -> dict[str, dict[str, Any]]:
         """Synchronous method to fetch YouTube trends data."""
         result: dict[str, dict[str, Any]] = {}
@@ -153,7 +158,7 @@ class GoogleTrendsClient:
                 keywords,
                 cat=0,
                 timeframe=timeframe,
-                geo="",
+                geo=geo,
                 gprop="youtube",
             )
 
