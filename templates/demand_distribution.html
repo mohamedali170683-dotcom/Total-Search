@@ -150,11 +150,17 @@
 
                 <!-- Search Button -->
                 <div class="flex items-center justify-between">
-                    <div class="flex flex-wrap gap-2">
-                        <span class="text-xs text-slate-400">Try:</span>
-                        <button @click="searchQuery = 'lavera cosmetics'; analyzeKeywords()" class="text-xs text-blue-600 hover:text-blue-700 font-medium transition">Cosmetics</button>
-                        <button @click="searchQuery = 'running shoes'; analyzeKeywords()" class="text-xs text-blue-600 hover:text-blue-700 font-medium transition">Running</button>
-                        <button @click="searchQuery = 'meal prep recipes'; analyzeKeywords()" class="text-xs text-blue-600 hover:text-blue-700 font-medium transition">Food</button>
+                    <div class="flex items-center gap-4">
+                        <div class="flex flex-wrap gap-2">
+                            <span class="text-xs text-slate-400">Try:</span>
+                            <button @click="searchQuery = 'lavera cosmetics'; analyzeKeywords()" class="text-xs text-blue-600 hover:text-blue-700 font-medium transition">Cosmetics</button>
+                            <button @click="searchQuery = 'running shoes'; analyzeKeywords()" class="text-xs text-blue-600 hover:text-blue-700 font-medium transition">Running</button>
+                            <button @click="searchQuery = 'meal prep recipes'; analyzeKeywords()" class="text-xs text-blue-600 hover:text-blue-700 font-medium transition">Food</button>
+                        </div>
+                        <label class="flex items-center space-x-2 text-xs text-slate-500 cursor-pointer">
+                            <input type="checkbox" x-model="forceRefresh" class="rounded border-slate-300 text-blue-600 focus:ring-blue-500">
+                            <span>Force refresh data</span>
+                        </label>
                     </div>
 
                     <button
@@ -478,7 +484,7 @@
         <div class="max-w-6xl mx-auto px-6 text-center">
             <p class="text-slate-600 font-medium">Total Search</p>
             <p class="text-slate-400 text-sm mt-1">Cross-Platform Demand Intelligence</p>
-            <p class="text-slate-300 text-xs mt-4">Data: Google (DataForSEO) | YouTube (Trends) | Amazon (Jungle Scout) | TikTok/Instagram (Apify) | Pinterest (Trends)</p>
+            <p class="text-slate-300 text-xs mt-4">Data: Google (DataForSEO) | YouTube (DataForSEO) | Amazon (DataForSEO) | TikTok/Instagram (Apify) | Pinterest (Trends)</p>
         </div>
     </footer>
 
@@ -488,6 +494,7 @@
                 searchQuery: '',
                 selectedCountry: 'us',
                 selectedLanguage: 'en',
+                forceRefresh: false,
                 isLoading: false,
                 results: null,
                 chart: null,
@@ -536,7 +543,8 @@
                         const params = new URLSearchParams({
                             keywords: this.searchQuery,
                             country: this.selectedCountry,
-                            language: this.selectedLanguage
+                            language: this.selectedLanguage,
+                            refresh: this.forceRefresh ? 'true' : 'false'
                         });
 
                         const response = await fetch(`/api/demand/analyze?${params}`);

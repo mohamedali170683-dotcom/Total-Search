@@ -10,7 +10,6 @@ from pathlib import Path
 from typing import Any
 
 # Add project root to path for Vercel serverless functions
-# index.py is at project root, so parent.resolve() is the project root
 project_root = Path(__file__).parent.resolve()
 sys.path.insert(0, str(project_root))
 
