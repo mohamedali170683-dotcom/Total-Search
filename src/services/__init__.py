@@ -1,4 +1,4 @@
-"""Services module for Total Demand."""
+"""Services module for Total Search."""
 
 from src.services.export import (
     generate_demand_report_pdf,

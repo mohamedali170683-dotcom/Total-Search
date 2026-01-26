@@ -28,11 +28,9 @@ class Settings(BaseSettings):
     junglescout_api_key: SecretStr = Field(default="", description="Jungle Scout API key")
     junglescout_api_key_name: str = Field(default="", description="Jungle Scout API key name")
 
-    # Meta Marketing API (optional — for Audience Reach)
-    meta_app_id: str = Field(default="", description="Meta App ID")
-    meta_app_secret: SecretStr = Field(default="", description="Meta App Secret")
-    meta_access_token: SecretStr = Field(default="", description="Meta Marketing API access token")
-    meta_ad_account_id: str = Field(default="", description="Meta Ad Account ID (without act_ prefix)")
+    # TickerTrends API (optional — for TikTok trend correlation)
+    tickertrends_api_key: SecretStr = Field(default="", description="TickerTrends API key")
+    tickertrends_endpoint: str = Field(default="/search-volume", description="TickerTrends API endpoint path")
 
     # Database
     database_url: str = Field(
@@ -64,14 +62,9 @@ class Settings(BaseSettings):
         return (self.dataforseo_login, self.dataforseo_password.get_secret_value())
 
     @property
-    def meta_configured(self) -> bool:
-        """Check if Meta Marketing API credentials are configured."""
-        return bool(
-            self.meta_app_id
-            and self.meta_app_secret.get_secret_value()
-            and self.meta_access_token.get_secret_value()
-            and self.meta_ad_account_id
-        )
+    def tickertrends_configured(self) -> bool:
+        """Check if TickerTrends API key is configured."""
+        return bool(self.tickertrends_api_key.get_secret_value())
 
 
 @lru_cache

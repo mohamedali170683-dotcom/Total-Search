@@ -3,6 +3,7 @@
 import asyncio
 import io
 import json
+import logging
 import math
 import os
 import sys
@@ -18,6 +19,8 @@ sys.path.insert(0, str(project_root))
 print(f"Project root: {project_root}")
 print(f"sys.path: {sys.path[:3]}")
 print(f"Files in project root: {list(project_root.iterdir())[:10]}")
+
+logger = logging.getLogger(__name__)
 
 from fastapi import BackgroundTasks, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -44,7 +47,7 @@ except Exception as e:
 
 # Initialize FastAPI app
 app = FastAPI(
-    title="Total Demand - Cross-Platform Demand Intelligence",
+    title="Total Search - Cross-Platform Search Intelligence",
     description="Multi-platform keyword research aggregating data from Google, YouTube, Amazon, TikTok, and Instagram",
     version="1.0.0",
 )
@@ -246,9 +249,9 @@ async def debug_page():
     return HTMLResponse(content=f"""
     <!DOCTYPE html>
     <html>
-    <head><title>Debug - Total Demand</title></head>
+    <head><title>Debug - Total Search</title></head>
     <body style="font-family: sans-serif; padding: 20px;">
-        <h1>Total Demand - Debug Page</h1>
+        <h1>Total Search - Debug Page</h1>
         <p>This page renders without Jinja templates.</p>
         <h2>System Info:</h2>
         <ul>
@@ -1182,7 +1185,7 @@ async def generate_brand_alerts(brand_id: int, results: list):
 
 
 # =============================================================================
-# Demand Distribution API - Core Feature for Cross-Platform Analysis
+# Search Distribution API - Core Feature for Cross-Platform Analysis
 # =============================================================================
 
 @app.get("/demand")
@@ -1600,7 +1603,7 @@ def _calculate_demand_distribution(keyword_data: dict, weight_preset: str = "gen
         else:
             normalized_scores[p] = round(_normalize_to_100(vol), 1)
 
-    # Compute Demand Index (weighted average of normalized scores)
+    # Compute Search Index (weighted average of normalized scores)
     weights = WEIGHT_PRESETS.get(weight_preset, WEIGHT_PRESETS["general"])
     weighted_sum = 0.0
     total_weight = 0.0
@@ -1911,25 +1914,22 @@ async def get_trends_intelligence(
     keywords: str = Query(..., description="Comma-separated keywords (max 5)"),
     country: str = Query(default="", description="Country code (e.g., US, DE, UK) or empty for worldwide"),
     timeframe: str = Query(default="today 12-m", description="Timeframe (today 12-m, today 3-m, today 1-m)"),
+    include_correlation: bool = Query(default=True, description="Include cross-platform correlation analysis"),
 ):
     """
     Get comprehensive Google Trends intelligence for keywords.
 
     Returns:
-    - 12-month interest trend chart data
+    - 12-month interest trend chart data (Google Web + YouTube + TikTok)
     - Geographic hotspots (top 10 countries)
     - Rising queries (emerging search terms)
     - Top related queries
     - Seasonality analysis
-
-    This is valuable for:
-    - Understanding when demand peaks (timing campaigns)
-    - Finding geographic markets to target
-    - Discovering related keyword opportunities
-    - Identifying emerging trends early
+    - Cross-platform trend correlation (if include_correlation=True)
     """
     try:
         from src.clients.google_trends import GoogleTrendsClient
+        from src.clients.tickertrends import TickerTrendsClient
 
         keyword_list = [k.strip() for k in keywords.split(",") if k.strip()][:5]
 
@@ -1953,10 +1953,46 @@ async def get_trends_intelligence(
                 geo=geo,
             )
 
+            # Fetch multi-platform trends (Google Web + YouTube)
+            multi_platform = {}
+            correlation_analysis = {}
+            if include_correlation:
+                try:
+                    multi_platform = await client.get_multi_platform_trends(
+                        keywords=keyword_list,
+                        timeframe=timeframe,
+                        geo=geo,
+                    )
+                except Exception as e:
+                    logger.warning(f"Multi-platform trends failed: {e}")
+                    multi_platform = {"platforms": {}}
+
+                # Fetch TikTok trends if configured
+                tiktok_data = {}
+                try:
+                    tt_client = TickerTrendsClient(settings=settings)
+                    if tt_client.is_configured and keyword_list:
+                        tiktok_data = await tt_client.get_hashtag_trends(
+                            hashtag=keyword_list[0].replace(" ", ""),
+                        )
+                        if tiktok_data.get("status") == "ok":
+                            multi_platform.setdefault("platforms", {})["tiktok"] = {
+                                "interest_over_time": tiktok_data.get("interest_over_time", []),
+                            }
+                except Exception as e:
+                    logger.warning(f"TikTok trends failed: {e}")
+
+                # Compute correlation
+                if multi_platform.get("platforms"):
+                    correlation_analysis = _compute_trend_correlation(
+                        multi_platform.get("platforms", {}),
+                        keyword_list[0],
+                    )
+
         # Enrich with insights
         insights = _generate_trends_insights(data)
 
-        return {
+        response = {
             "keywords": keyword_list,
             "country": geo or "Worldwide",
             "timeframe": timeframe,
@@ -1967,6 +2003,12 @@ async def get_trends_intelligence(
             "seasonality": data.get("seasonality"),
             "insights": insights,
         }
+
+        if include_correlation:
+            response["multi_platform_trends"] = multi_platform.get("platforms", {})
+            response["correlation_analysis"] = correlation_analysis
+
+        return response
 
     except HTTPException:
         raise
@@ -2009,72 +2051,124 @@ async def get_daily_trending_searches(
         )
 
 
-# =============================================================================
-# Meta Audience Reach API
-# =============================================================================
 
-@app.get("/api/audience/reach")
-async def get_audience_reach(
-    keywords: str = Query(..., description="Comma-separated keywords"),
-    country: str = Query(default="US", description="Country code (US, DE, GB, etc.)"),
-    include_demographics: bool = Query(default=True, description="Include age/gender breakdown"),
-):
+def _compute_trend_correlation(
+    platforms_data: dict,
+    primary_keyword: str,
+) -> dict:
     """
-    Get Meta (Facebook/Instagram) audience reach estimation for keywords.
+    Compute cross-platform trend correlation analysis.
 
-    Maps keywords to Meta interest categories and returns estimated
-    daily/monthly active users who can be reached. No ad spend required.
-    Returns 'not_configured' status if Meta credentials are missing.
+    Extracts time series for the primary keyword from each platform,
+    computes Pearson correlation, and detects lead/lag relationships.
     """
     try:
-        settings = get_settings()
+        import numpy as np
+    except ImportError:
+        return {"error": "numpy not installed"}
 
-        if not settings.meta_configured:
-            return {
-                "status": "not_configured",
-                "message": "Meta Marketing API not configured. Add META_APP_ID, META_APP_SECRET, META_ACCESS_TOKEN, and META_AD_ACCOUNT_ID to your environment.",
-                "keywords": [],
-                "audience": None,
+    results: dict = {"pairs": [], "insights": []}
+
+    # Extract time series values per platform
+    series_by_platform: dict[str, list[float]] = {}
+
+    for platform_name, platform_data in platforms_data.items():
+        iot = platform_data.get("interest_over_time", [])
+        if not iot:
+            continue
+
+        if platform_name == "tiktok":
+            values = [float(entry.get("tiktok", 0)) for entry in iot]
+        else:
+            values = [float(entry.get(primary_keyword, 0)) for entry in iot]
+
+        if values and any(v > 0 for v in values):
+            series_by_platform[platform_name] = values
+
+    if len(series_by_platform) < 2:
+        return results
+
+    # Compare each pair
+    platform_names = list(series_by_platform.keys())
+    for i in range(len(platform_names)):
+        for j in range(i + 1, len(platform_names)):
+            p1, p2 = platform_names[i], platform_names[j]
+            s1, s2 = series_by_platform[p1], series_by_platform[p2]
+
+            # Align lengths (trim to shorter)
+            min_len = min(len(s1), len(s2))
+            if min_len < 4:
+                continue
+            a1 = np.array(s1[-min_len:], dtype=float)
+            a2 = np.array(s2[-min_len:], dtype=float)
+
+            # Skip if either series is constant
+            if np.std(a1) == 0 or np.std(a2) == 0:
+                continue
+
+            # Base correlation (no lag)
+            base_corr = float(np.corrcoef(a1, a2)[0, 1])
+
+            # Cross-correlate with lags 1-4 to find lead/lag
+            best_lag = 0
+            best_corr = abs(base_corr)
+            best_corr_signed = base_corr
+
+            for lag in range(1, min(5, min_len - 2)):
+                # p2 leads p1 by 'lag' periods
+                corr_val = float(np.corrcoef(a1[lag:], a2[:-lag])[0, 1])
+                if abs(corr_val) > best_corr:
+                    best_corr = abs(corr_val)
+                    best_corr_signed = corr_val
+                    best_lag = lag
+
+                # p1 leads p2 by 'lag' periods
+                corr_val = float(np.corrcoef(a1[:-lag], a2[lag:])[0, 1])
+                if abs(corr_val) > best_corr:
+                    best_corr = abs(corr_val)
+                    best_corr_signed = corr_val
+                    best_lag = -lag
+
+            pair_result = {
+                "platform_a": p1,
+                "platform_b": p2,
+                "correlation": round(best_corr_signed, 3),
+                "lag_periods": best_lag,
+                "relationship": "synchronized",
             }
 
-        from src.clients.meta_ads import MetaAdsClient
-
-        keyword_list = [k.strip() for k in keywords.split(",") if k.strip()][:10]
-
-        if not keyword_list:
-            raise HTTPException(status_code=400, detail="At least one keyword is required")
-
-        country_upper = country.upper()
-
-        async with MetaAdsClient(settings=settings) as client:
-            data = await client.get_audience_reach(
-                keywords=keyword_list,
-                country_code=country_upper,
-            )
-
-            if include_demographics and data.get("primary_interest_id"):
-                demographics = await client.get_demographic_breakdown(
-                    interest_id=data["primary_interest_id"],
-                    interest_name=data.get("primary_interest_name", ""),
-                    country_code=country_upper,
+            if best_corr > 0.4 and best_lag > 0:
+                pair_result["relationship"] = f"{p2} leads {p1} by ~{best_lag} week(s)"
+                results["insights"].append(
+                    f"{p2.replace('_', ' ').title()} trends lead "
+                    f"{p1.replace('_', ' ').title()} by ~{best_lag} week(s) "
+                    f"(r={best_corr_signed:.2f}). Social signals may predict search demand."
                 )
-                data["demographics"] = demographics
+            elif best_corr > 0.4 and best_lag < 0:
+                pair_result["relationship"] = f"{p1} leads {p2} by ~{abs(best_lag)} week(s)"
+                results["insights"].append(
+                    f"{p1.replace('_', ' ').title()} trends lead "
+                    f"{p2.replace('_', ' ').title()} by ~{abs(best_lag)} week(s) "
+                    f"(r={best_corr_signed:.2f})."
+                )
+            elif best_corr > 0.6:
+                pair_result["relationship"] = "strongly synchronized"
+                results["insights"].append(
+                    f"{p1.replace('_', ' ').title()} and "
+                    f"{p2.replace('_', ' ').title()} trends are strongly correlated "
+                    f"(r={best_corr_signed:.2f}). Interest moves together across platforms."
+                )
+            elif best_corr < 0.2:
+                pair_result["relationship"] = "independent"
+                results["insights"].append(
+                    f"{p1.replace('_', ' ').title()} and "
+                    f"{p2.replace('_', ' ').title()} trends appear independent "
+                    f"(r={best_corr_signed:.2f}). Platforms serve different audiences."
+                )
 
-        return {
-            "status": "ok",
-            "keywords": keyword_list,
-            "country": country_upper,
-            "audience": data,
-        }
+            results["pairs"].append(pair_result)
 
-    except HTTPException:
-        raise
-    except Exception as e:
-        import traceback
-        raise HTTPException(
-            status_code=500,
-            detail=f"Failed to get audience reach: {str(e)}\n{traceback.format_exc()}"
-        )
+    return results
 
 
 def _generate_trends_insights(data: dict) -> list[dict]:
@@ -2125,7 +2219,6 @@ def _generate_trends_insights(data: dict) -> list[dict]:
     regions = data.get("interest_by_region", [])
     if regions and len(regions) >= 2:
         top_region = regions[0].get("region", "N/A")
-        # Get interest value for first keyword
         first_kw = data.get("keywords", [""])[0]
         top_interest = regions[0].get(first_kw, 0) if first_kw else 0
 
@@ -2170,7 +2263,7 @@ def _generate_trends_insights(data: dict) -> list[dict]:
                         "icon": "fa-chart-line-down",
                     })
 
-    return insights[:5]  # Limit to 5 insights
+    return insights[:5]
 
 
 # =============================================================================
@@ -2426,7 +2519,7 @@ def _calculate_platform_totals(time_series: list) -> dict:
 @app.get("/api/export/pdf")
 async def export_demand_pdf(
     keywords: str = Query(..., description="Comma-separated keywords"),
-    title: str = Query(default="Demand Distribution Analysis", description="Report title"),
+    title: str = Query(default="Search Distribution Analysis", description="Report title"),
     refresh: bool = Query(default=False, description="Force refresh data"),
 ):
     """
@@ -2526,7 +2619,7 @@ async def export_demand_pdf(
 @app.get("/api/export/pptx")
 async def export_demand_pptx(
     keywords: str = Query(..., description="Comma-separated keywords"),
-    title: str = Query(default="Demand Distribution Analysis", description="Report title"),
+    title: str = Query(default="Search Distribution Analysis", description="Report title"),
     refresh: bool = Query(default=False, description="Force refresh data"),
 ):
     """

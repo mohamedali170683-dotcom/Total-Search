@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Demand Distribution - Total Demand</title>
+    <title>Search Distribution - Total Search</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -62,8 +62,8 @@
                         <i class="fas fa-chart-pie text-white text-lg"></i>
                     </div>
                     <div>
-                        <h1 class="text-lg font-semibold text-slate-900">Total Demand</h1>
-                        <span class="text-xs text-slate-500">Cross-Platform Demand Intelligence</span>
+                        <h1 class="text-lg font-semibold text-slate-900">Total Search</h1>
+                        <span class="text-xs text-slate-500">Cross-Platform Search Intelligence</span>
                     </div>
                 </div>
                 <nav class="flex items-center space-x-2">
@@ -86,7 +86,7 @@
         <div class="card p-6 mb-8">
             <div class="flex items-center justify-between mb-6">
                 <div>
-                    <h2 class="text-xl font-semibold text-slate-900">Analyze Demand Distribution</h2>
+                    <h2 class="text-xl font-semibold text-slate-900">Analyze Search Distribution</h2>
                     <p class="text-slate-500 text-sm mt-1">
                         Discover where your audience searches across platforms
                     </p>
@@ -196,7 +196,7 @@
             <!-- Summary Stats Row -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div class="card card-hover p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
-                    <p class="text-xs font-medium text-blue-600 uppercase tracking-wide">Demand Index</p>
+                    <p class="text-xs font-medium text-blue-600 uppercase tracking-wide">Search Index</p>
                     <p class="text-3xl font-bold text-blue-700 mt-1" x-text="(results?.demand_index || 0) + '/100'"></p>
                     <p class="text-xs text-blue-400 mt-1">cross-platform composite score</p>
                 </div>
@@ -219,7 +219,7 @@
                 <!-- Unified Demand Distribution Chart -->
                 <div class="lg:col-span-2 card p-6">
                     <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-slate-900">Demand Distribution</h3>
+                        <h3 class="text-lg font-semibold text-slate-900">Search Distribution</h3>
                         <div class="flex space-x-2">
                             <button @click="exportPDF()" class="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
                                 <i class="fas fa-file-pdf mr-1"></i> PDF
@@ -238,7 +238,7 @@
                                 <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                                     <div class="text-center">
                                         <p class="text-2xl font-bold text-blue-700" x-text="(results?.demand_index || 0) + '/100'"></p>
-                                        <p class="text-xs text-slate-500">Demand Index</p>
+                                        <p class="text-xs text-slate-500">Search Index</p>
                                     </div>
                                 </div>
                             </div>
@@ -247,8 +247,7 @@
                         <!-- All Platforms Unified -->
                         <div class="flex-1">
                             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                                <i class="fas fa-chart-bar mr-1"></i> Platform Demand Scores
-                                <span class="text-slate-300 font-normal normal-case ml-1">(normalized 0-100)</span>
+                                <i class="fas fa-chart-bar mr-1"></i> Platform Search Volume
                             </p>
                             <div class="space-y-3">
                                 <template x-for="platform in (results?.platforms || []).filter(p => p.volume > 0)" :key="platform.platform">
@@ -270,14 +269,14 @@
                                                     ></span>
                                                 </div>
                                                 <div class="flex items-center space-x-2">
-                                                    <span class="text-slate-900 font-semibold" x-text="platform.normalized_score + '/100'"></span>
-                                                    <span class="text-slate-400 text-xs" x-text="'(' + platform.percentage + '%)'"></span>
+                                                    <span class="text-slate-900 font-bold text-base" x-text="formatNumber(platform.volume)"></span>
+                                                    <span class="text-slate-400 text-xs" x-text="platform.metric_label.toLowerCase()"></span>
                                                 </div>
                                             </div>
                                             <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
                                                 <div class="h-full rounded-full platform-bar" :style="'width: ' + Math.max(platform.normalized_score, 1) + '%; background-color: ' + platform.color"></div>
                                             </div>
-                                            <p class="text-[10px] text-slate-400 mt-0.5" x-text="'Raw: ' + formatNumber(platform.volume) + ' ' + platform.metric_label.toLowerCase()"></p>
+                                            <p class="text-[10px] text-slate-400 mt-0.5" x-text="'Search Index: ' + platform.normalized_score + '/100 (' + platform.percentage + '%)'"></p>
                                         </div>
                                         <div class="w-10 text-right ml-3">
                                             <span x-show="platform.trend === 'growing'" class="text-green-500 text-sm"><i class="fas fa-arrow-up"></i></span>
@@ -293,11 +292,11 @@
 
                 <!-- Key Insight Panel -->
                 <div class="card p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
-                    <h3 class="text-lg font-semibold text-slate-900 mb-4">Demand Overview</h3>
+                    <h3 class="text-lg font-semibold text-slate-900 mb-4">Search Overview</h3>
 
                     <div class="text-center py-4">
                         <p class="text-5xl font-bold text-blue-600" x-text="results?.demand_index || 0"></p>
-                        <p class="text-slate-500 mt-1 font-medium text-sm">Demand Index <span class="text-slate-400">/ 100</span></p>
+                        <p class="text-slate-500 mt-1 font-medium text-sm">Search Index <span class="text-slate-400">/ 100</span></p>
                     </div>
 
                     <div class="bg-white/60 rounded-xl p-4 mt-3">
@@ -485,28 +484,28 @@
                     <!-- FAQ 1 -->
                     <div class="border border-slate-200 rounded-lg overflow-hidden">
                         <button @click="openFaq = openFaq === 1 ? null : 1" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">What is Total Demand?</span>
+                            <span class="font-medium text-slate-800">What is Total Search?</span>
                             <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 1 }"></i>
                         </button>
                         <div x-show="openFaq === 1" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>Total Demand is a cross-platform demand intelligence tool. It measures how much demand exists for a brand or keyword across 6 major platforms: Google, YouTube, Amazon, TikTok, Instagram, and Pinterest.</p>
-                            <p class="mt-2">Each platform reveals demand through a different signal &mdash; search queries on Google, video engagement on TikTok, visual discovery on Pinterest. Total Demand brings these signals together into one unified view so brands can see where their audience is and where opportunities exist.</p>
+                            <p>Total Search is a cross-platform search intelligence tool. It measures how much search demand exists for a brand or keyword across 6 major platforms: Google, YouTube, Amazon, TikTok, Instagram, and Pinterest.</p>
+                            <p class="mt-2">Each platform reveals demand through a different signal &mdash; search queries on Google, video engagement on TikTok, visual discovery on Pinterest. Total Search brings these signals together into one unified view so brands can see where their audience is and where opportunities exist.</p>
                         </div>
                     </div>
                     <!-- FAQ 2 -->
                     <div class="border border-slate-200 rounded-lg overflow-hidden">
                         <button @click="openFaq = openFaq === 2 ? null : 2" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">What is the Demand Index?</span>
+                            <span class="font-medium text-slate-800">What is the Search Index?</span>
                             <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 2 }"></i>
                         </button>
                         <div x-show="openFaq === 2" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>The Demand Index is a composite score from 0 to 100 that summarizes overall demand across all platforms. It works by:</p>
+                            <p>The Search Index is a composite score from 0 to 100 that summarizes overall search demand across all platforms. It works by:</p>
                             <ol class="mt-2 ml-4 list-decimal space-y-1">
                                 <li><strong>Normalizing</strong> each platform's raw metric to a 0-100 scale using logarithmic scaling (so a platform with 1,000 searches and one with 10,000 interactions are comparable)</li>
                                 <li><strong>Weighting</strong> each platform by its relevance: Google (25%), YouTube (18%), Amazon (18%), TikTok (13%), Instagram (13%), Pinterest (13%)</li>
                                 <li><strong>Averaging</strong> the weighted scores into a single number</li>
                             </ol>
-                            <p class="mt-2">A Demand Index of 70+ indicates strong cross-platform demand. Below 30 suggests the keyword has limited presence across platforms.</p>
+                            <p class="mt-2">A Search Index of 70+ indicates strong cross-platform demand. Below 30 suggests the keyword has limited presence across platforms.</p>
                         </div>
                     </div>
                     <!-- FAQ 3 -->
@@ -552,7 +551,7 @@
                             <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 5 }"></i>
                         </button>
                         <div x-show="openFaq === 5" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>The Demand Index is a weighted average of normalized platform scores. Different audiences use platforms differently, so the weights change based on the selected Audience Profile. Each profile is calibrated using industry research data:</p>
+                            <p>The Search Index is a weighted average of normalized platform scores. Different audiences use platforms differently, so the weights change based on the selected Audience Profile. Each profile is calibrated using industry research data:</p>
 
                             <div class="mt-3 space-y-3">
                                 <div class="bg-slate-50 rounded-lg p-3">
@@ -596,14 +595,14 @@
                 </div>
             </div>
 
-            <!-- Google Trends Intelligence Section -->
+            <!-- Cross-Platform Trends Intelligence Section -->
             <div class="card p-6 mt-6" x-show="hasResults">
                 <div class="flex items-center justify-between mb-6">
                     <div>
                         <h3 class="text-lg font-semibold text-slate-900">
-                            <i class="fab fa-google text-blue-500 mr-2"></i>Google Trends Intelligence
+                            <i class="fas fa-chart-line text-blue-500 mr-2"></i>Cross-Platform Search Intelligence
                         </h3>
-                        <p class="text-sm text-slate-500 mt-1">Trend analysis, geographic hotspots & related queries</p>
+                        <p class="text-sm text-slate-500 mt-1">Google Web + YouTube + TikTok trend analysis & correlation</p>
                     </div>
                     <button
                         @click="loadTrendsIntelligence()"
@@ -622,9 +621,9 @@
                         <div class="lg:col-span-2">
                             <h4 class="text-sm font-semibold text-slate-700 mb-3">
                                 <i class="fas fa-chart-area mr-1 text-blue-500"></i>
-                                12-Month Interest Trend
+                                12-Month Cross-Platform Trend
                             </h4>
-                            <div class="bg-slate-50 rounded-xl p-4 h-64">
+                            <div class="bg-slate-50 rounded-xl p-4 h-80">
                                 <canvas id="trendsChart"></canvas>
                             </div>
                             <!-- Seasonality Badge -->
@@ -636,6 +635,28 @@
                                 <span class="text-xs text-slate-500">
                                     Seasonality: <span x-text="trendsData?.seasonality?.seasonality_strength" class="font-medium"></span>
                                 </span>
+                            </div>
+
+                            <!-- Correlation Insight Card -->
+                            <div x-show="trendsData?.correlation_analysis?.insights?.length" class="mt-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200">
+                                <h5 class="text-sm font-semibold text-indigo-800 mb-2">
+                                    <i class="fas fa-link mr-1"></i> Cross-Platform Correlation
+                                </h5>
+                                <template x-for="insight in (trendsData?.correlation_analysis?.insights || [])" :key="insight">
+                                    <p class="text-sm text-indigo-700 mb-1" x-text="insight"></p>
+                                </template>
+                                <div x-show="trendsData?.correlation_analysis?.pairs?.length" class="mt-2 flex flex-wrap gap-2">
+                                    <template x-for="pair in (trendsData?.correlation_analysis?.pairs || [])" :key="pair.platform_a + pair.platform_b">
+                                        <span class="text-xs px-2 py-1 rounded-full"
+                                            :class="{
+                                                'bg-green-100 text-green-700': Math.abs(pair.correlation) > 0.6,
+                                                'bg-amber-100 text-amber-700': Math.abs(pair.correlation) >= 0.3 && Math.abs(pair.correlation) <= 0.6,
+                                                'bg-slate-100 text-slate-600': Math.abs(pair.correlation) < 0.3
+                                            }"
+                                            x-text="pair.platform_a.replace('_',' ') + ' / ' + pair.platform_b.replace('_',' ') + ': r=' + pair.correlation">
+                                        </span>
+                                    </template>
+                                </div>
                             </div>
                         </div>
 
@@ -723,157 +744,41 @@
 
                 <!-- Empty State for Trends -->
                 <div x-show="!trendsData && !trendsLoading" class="text-center py-8">
-                    <i class="fab fa-google text-4xl text-slate-300 mb-3"></i>
-                    <p class="text-slate-500 text-sm">Click "Load Trends" to fetch Google Trends data</p>
-                    <p class="text-slate-400 text-xs mt-1">Includes trend charts, geographic hotspots, and rising queries</p>
+                    <i class="fas fa-chart-line text-4xl text-slate-300 mb-3"></i>
+                    <p class="text-slate-500 text-sm">Click "Load Trends" to fetch cross-platform trend data</p>
+                    <p class="text-slate-400 text-xs mt-1">Google Web + YouTube + TikTok trends with correlation analysis</p>
                 </div>
             </div>
 
-            <!-- Meta Audience Reach Section -->
-            <div class="card p-6 mt-6" x-show="hasResults">
-                <div class="flex items-center justify-between mb-6">
-                    <div>
-                        <h3 class="text-lg font-semibold text-slate-900">
-                            <i class="fab fa-meta text-blue-600 mr-2"></i>Audience Reach (Meta)
-                        </h3>
-                        <p class="text-sm text-slate-500 mt-1">Estimated reachable audience on Facebook &amp; Instagram</p>
-                    </div>
-                    <button
-                        @click="loadAudienceReach()"
-                        :disabled="audienceLoading"
-                        class="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition disabled:opacity-50"
-                    >
-                        <i :class="audienceLoading ? 'fas fa-circle-notch fa-spin' : 'fas fa-users'" class="mr-1"></i>
-                        <span x-text="audienceLoading ? 'Loading...' : (audienceData ? 'Refresh' : 'Load Audience')"></span>
-                    </button>
-                </div>
-
-                <!-- Not Configured State -->
-                <div x-show="audienceData?.status === 'not_configured'" class="text-center py-6">
-                    <i class="fas fa-cog text-3xl text-slate-300 mb-3"></i>
-                    <p class="text-slate-500 text-sm" x-text="audienceData?.message"></p>
-                </div>
-
-                <!-- Audience Data -->
-                <div x-show="audienceData?.status === 'ok'" x-cloak>
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                        <!-- Total Reach Card -->
-                        <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-5 border border-indigo-100">
-                            <p class="text-xs font-medium text-indigo-600 uppercase tracking-wide">Monthly Reachable Audience</p>
-                            <p class="text-3xl font-bold text-indigo-700 mt-2"
-                               x-text="formatLargeNumber(audienceData?.audience?.total_reach?.estimate_mau_upper_bound)"></p>
-                            <p class="text-xs text-indigo-400 mt-1">
-                                Range: <span x-text="formatLargeNumber(audienceData?.audience?.total_reach?.estimate_mau_lower_bound)"></span>
-                                &ndash; <span x-text="formatLargeNumber(audienceData?.audience?.total_reach?.estimate_mau_upper_bound)"></span>
-                            </p>
-                            <p class="text-xs text-indigo-400 mt-0.5">
-                                DAU: <span x-text="formatLargeNumber(audienceData?.audience?.total_reach?.estimate_dau)"></span>
-                            </p>
-                            <div class="flex items-center space-x-2 mt-3">
-                                <i class="fab fa-facebook text-blue-600"></i>
-                                <i class="fab fa-instagram text-pink-500"></i>
-                                <span class="text-xs text-slate-500">Facebook &amp; Instagram</span>
-                            </div>
-                        </div>
-
-                        <!-- Matched Keywords -->
-                        <div class="lg:col-span-2">
-                            <h4 class="text-sm font-semibold text-slate-700 mb-3">
-                                <i class="fas fa-bullseye mr-1 text-indigo-500"></i>Keyword &rarr; Interest Mapping
-                            </h4>
-                            <div class="space-y-2">
-                                <template x-for="match in audienceData?.audience?.matched_keywords || []" :key="match.keyword">
-                                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
-                                        <div>
-                                            <span class="text-sm font-medium text-slate-800" x-text="match.keyword"></span>
-                                            <span class="text-xs text-slate-400 ml-2">
-                                                &rarr; <span x-text="match.interest_name"></span>
-                                            </span>
-                                        </div>
-                                        <div class="text-right">
-                                            <span class="text-sm font-semibold text-indigo-600" x-text="formatLargeNumber(match.estimate_mau_upper_bound)"></span>
-                                            <span class="text-xs text-slate-400"> MAU</span>
-                                        </div>
-                                    </div>
-                                </template>
-                                <!-- Unmatched keywords -->
-                                <template x-for="kw in audienceData?.audience?.unmatched_keywords || []" :key="kw">
-                                    <div class="flex items-center p-3 bg-amber-50 rounded-lg border border-amber-100">
-                                        <i class="fas fa-exclamation-triangle text-amber-400 mr-2"></i>
-                                        <span class="text-sm text-amber-700">
-                                            "<span x-text="kw"></span>" &mdash; no matching Meta interest found
-                                        </span>
-                                    </div>
-                                </template>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Demographics Breakdown -->
-                    <div x-show="audienceData?.audience?.demographics" class="mt-6 pt-6 border-t border-slate-200">
-                        <h4 class="text-sm font-semibold text-slate-700 mb-3">
-                            <i class="fas fa-chart-bar mr-1 text-purple-500"></i>
-                            Demographic Breakdown
-                        </h4>
-                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-                            <!-- Age Group Bars -->
-                            <div>
-                                <p class="text-xs text-slate-500 mb-2 uppercase tracking-wide">By Age Group (DAU)</p>
-                                <div class="space-y-2">
-                                    <template x-for="group in audienceData?.audience?.demographics?.age_groups || []" :key="group.range">
-                                        <div>
-                                            <div class="flex justify-between text-xs mb-1">
-                                                <span class="text-slate-600" x-text="group.range"></span>
-                                                <span class="text-slate-800 font-medium" x-text="formatLargeNumber(group.total)"></span>
-                                            </div>
-                                            <div class="h-3 bg-slate-100 rounded-full overflow-hidden flex">
-                                                <div class="h-full bg-blue-400 rounded-l-full"
-                                                     :style="'width:' + getGenderPercent(group, 'male') + '%'"
-                                                     :title="'Male: ' + formatLargeNumber(group.male)"></div>
-                                                <div class="h-full bg-pink-400 rounded-r-full"
-                                                     :style="'width:' + getGenderPercent(group, 'female') + '%'"
-                                                     :title="'Female: ' + formatLargeNumber(group.female)"></div>
-                                            </div>
-                                        </div>
-                                    </template>
+            <!-- Opportunities Panel -->
+            <div class="card p-6 mt-6 bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200" x-show="getOpportunities().length > 0">
+                <h3 class="text-lg font-semibold text-slate-900 mb-4">
+                    <i class="fas fa-lightbulb text-emerald-500 mr-2"></i>Opportunities Detected
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <template x-for="opp in getOpportunities()" :key="opp.title">
+                        <div class="p-4 bg-white/70 rounded-xl border border-emerald-200">
+                            <div class="flex items-start space-x-3">
+                                <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" :class="opp.iconBg">
+                                    <i :class="opp.icon" class="text-sm"></i>
                                 </div>
-                                <div class="flex items-center space-x-4 mt-3 text-xs text-slate-400">
-                                    <span><span class="inline-block w-2.5 h-2.5 bg-blue-400 rounded-full mr-1"></span>Male</span>
-                                    <span><span class="inline-block w-2.5 h-2.5 bg-pink-400 rounded-full mr-1"></span>Female</span>
+                                <div>
+                                    <p class="text-sm font-semibold text-slate-800" x-text="opp.title"></p>
+                                    <p class="text-xs text-slate-600 mt-1" x-text="opp.description"></p>
+                                    <span class="inline-block mt-2 text-[10px] font-medium px-2 py-0.5 rounded-full"
+                                        :class="{
+                                            'bg-red-100 text-red-700': opp.priority === 'high',
+                                            'bg-amber-100 text-amber-700': opp.priority === 'medium',
+                                            'bg-slate-100 text-slate-600': opp.priority === 'low'
+                                        }"
+                                        x-text="opp.priority + ' priority'"></span>
                                 </div>
                             </div>
-                            <!-- Gender Split -->
-                            <div class="flex flex-col items-center justify-center">
-                                <p class="text-xs text-slate-500 mb-3 uppercase tracking-wide">Gender Split</p>
-                                <div class="flex items-center space-x-8">
-                                    <div class="text-center">
-                                        <i class="fas fa-mars text-blue-500 text-2xl"></i>
-                                        <p class="text-lg font-bold text-blue-600 mt-1"
-                                           x-text="Math.round((audienceData?.audience?.demographics?.gender_split?.male || 0) * 100) + '%'"></p>
-                                        <p class="text-xs text-slate-400">Male</p>
-                                    </div>
-                                    <div class="text-center">
-                                        <i class="fas fa-venus text-pink-500 text-2xl"></i>
-                                        <p class="text-lg font-bold text-pink-600 mt-1"
-                                           x-text="Math.round((audienceData?.audience?.demographics?.gender_split?.female || 0) * 100) + '%'"></p>
-                                        <p class="text-xs text-slate-400">Female</p>
-                                    </div>
-                                </div>
-                                <p class="text-xs text-slate-400 mt-3">
-                                    Total DAU: <span x-text="formatLargeNumber(audienceData?.audience?.demographics?.total_dau)"></span>
-                                </p>
-                            </div>
                         </div>
-                    </div>
-                </div>
-
-                <!-- Empty State -->
-                <div x-show="!audienceData && !audienceLoading" class="text-center py-8">
-                    <i class="fab fa-meta text-4xl text-slate-300 mb-3"></i>
-                    <p class="text-slate-500 text-sm">Click "Load Audience" to estimate reachable audience on Facebook &amp; Instagram</p>
-                    <p class="text-slate-400 text-xs mt-1">Uses Meta Marketing API (no ad spend required)</p>
+                    </template>
                 </div>
             </div>
+
         </div>
 
         <!-- Empty State -->
@@ -900,8 +805,8 @@
     <!-- Footer -->
     <footer class="border-t border-slate-200 mt-16 py-8 bg-white">
         <div class="max-w-6xl mx-auto px-6 text-center">
-            <p class="text-slate-600 font-medium">Total Demand</p>
-            <p class="text-slate-400 text-sm mt-1">Cross-Platform Demand Intelligence</p>
+            <p class="text-slate-600 font-medium">Total Search</p>
+            <p class="text-slate-400 text-sm mt-1">Cross-Platform Search Intelligence</p>
             <p class="text-slate-300 text-xs mt-4">Data: Google (DataForSEO) | YouTube (Google Trends / Estimate) | Amazon (DataForSEO) | TikTok/Instagram (Apify) | Pinterest (Trends)</p>
         </div>
     </footer>
@@ -920,8 +825,6 @@
                 trendsData: null,
                 trendsLoading: false,
                 trendsChart: null,
-                audienceData: null,
-                audienceLoading: false,
 
                 get hasResults() {
                     return this.results && this.results.total_demand > 0;
@@ -967,7 +870,6 @@
                     this.isLoading = true;
                     this.results = null;
                     this.trendsData = null;  // Reset trends data for new search
-                    this.audienceData = null;  // Reset audience data for new search
 
                     try {
                         const params = new URLSearchParams({
@@ -988,6 +890,8 @@
                             this.$nextTick(() => {
                                 requestAnimationFrame(() => this.renderChart());
                             });
+                            // Auto-load cross-platform trends after main analysis
+                            this.$nextTick(() => this.loadTrendsIntelligence());
                         } else {
                             alert('Error: ' + (data.detail || 'Analysis failed'));
                         }
@@ -1083,7 +987,7 @@
                     const url = window.URL.createObjectURL(blob);
                     const a = document.createElement('a');
                     a.href = url;
-                    a.download = 'total_demand_analysis.csv';
+                    a.download = 'total_search_analysis.csv';
                     a.click();
                 },
 
@@ -1092,18 +996,18 @@
                     const platforms = (this.results.platforms || []).filter(p => p.volume > 0);
 
                     const profileLabel = this.results.weight_preset_label || 'General';
-                    const summary = `Total Demand Analysis (${this.getCountryName()})
+                    const summary = `Total Search Analysis (${this.getCountryName()})
 ============================
 Audience Profile: ${profileLabel}
 
-Demand Index: ${this.results.demand_index}/100 (cross-platform composite score)
+Search Index: ${this.results.demand_index}/100 (cross-platform composite score)
 
 Platform Breakdown:
 ${platforms.map(p => `  - ${p.display_name}: ${p.normalized_score}/100 (raw: ${this.formatNumber(p.volume)} ${p.metric_label.toLowerCase()})`).join('\n')}
 
 Top Platform: ${this.results.distribution_summary?.top_platform_name || '-'} (${this.results.distribution_summary?.top_platform_score || 0}/100)
 
-Generated by Total Demand — Cross-Platform Demand Intelligence`;
+Generated by Total Search — Cross-Platform Search Intelligence`;
                     navigator.clipboard.writeText(summary).then(() => {
                         alert('Summary copied to clipboard!');
                     });
@@ -1113,7 +1017,7 @@ Generated by Total Demand — Cross-Platform Demand Intelligence`;
                     if (!this.searchQuery.trim()) return;
                     const params = new URLSearchParams({
                         keywords: this.searchQuery,
-                        title: 'Demand Distribution Analysis',
+                        title: 'Search Distribution Analysis',
                         country: this.selectedCountry
                     });
                     window.open(`/api/export/pdf?${params}`, '_blank');
@@ -1123,7 +1027,7 @@ Generated by Total Demand — Cross-Platform Demand Intelligence`;
                     if (!this.searchQuery.trim()) return;
                     const params = new URLSearchParams({
                         keywords: this.searchQuery,
-                        title: 'Demand Distribution Analysis',
+                        title: 'Search Distribution Analysis',
                         country: this.selectedCountry
                     });
                     window.open(`/api/export/pptx?${params}`, '_blank');
@@ -1159,35 +1063,6 @@ Generated by Total Demand — Cross-Platform Demand Intelligence`;
                     }
                 },
 
-                async loadAudienceReach() {
-                    if (!this.searchQuery.trim()) return;
-
-                    this.audienceLoading = true;
-
-                    try {
-                        const params = new URLSearchParams({
-                            keywords: this.searchQuery,
-                            country: this.selectedCountry.toUpperCase(),
-                            include_demographics: 'true'
-                        });
-
-                        const response = await fetch(`/api/audience/reach?${params}`);
-                        const data = await response.json();
-
-                        if (response.ok) {
-                            this.audienceData = data;
-                        } else {
-                            console.error('Audience reach error:', data);
-                            alert('Error loading audience data: ' + (data.detail || 'Failed to fetch audience reach'));
-                        }
-                    } catch (error) {
-                        console.error('Audience reach fetch error:', error);
-                        alert('Failed to load audience reach data. Please try again.');
-                    } finally {
-                        this.audienceLoading = false;
-                    }
-                },
-
                 renderTrendsChart() {
                     const ctx = document.getElementById('trendsChart');
                     if (!ctx || !this.trendsData?.interest_over_time) return;
@@ -1196,49 +1071,96 @@ Generated by Total Demand — Cross-Platform Demand Intelligence`;
                         this.trendsChart.destroy();
                     }
 
-                    const timeData = this.trendsData.interest_over_time;
-                    const labels = timeData.map(d => {
-                        const date = new Date(d.date);
-                        return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-                    });
+                    const datasets = [];
+                    let labels = [];
 
-                    // Get all keywords from the data
-                    const keywords = Object.keys(timeData[0] || {}).filter(k => k !== 'date' && k !== 'isPartial');
-                    const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6'];
+                    const mp = this.trendsData.multi_platform_trends;
+                    const primaryKw = (this.trendsData.keywords || [])[0] || '';
 
-                    const datasets = keywords.map((keyword, idx) => ({
-                        label: keyword,
-                        data: timeData.map(d => d[keyword] || 0),
-                        borderColor: colors[idx % colors.length],
-                        backgroundColor: colors[idx % colors.length] + '20',
-                        fill: true,
-                        tension: 0.4,
-                        pointRadius: 0,
-                        pointHoverRadius: 4,
-                    }));
+                    // Multi-platform mode: render Google Web + YouTube + TikTok lines
+                    if (mp && Object.keys(mp).length > 0) {
+                        const platformConfig = {
+                            google_web: { label: 'Google Web', color: '#3b82f6', dash: [] },
+                            youtube:    { label: 'YouTube',    color: '#ef4444', dash: [] },
+                            tiktok:     { label: 'TikTok',     color: '#000000', dash: [5, 5] },
+                        };
+
+                        // Use google_web labels as primary timeline
+                        const webData = mp.google_web?.interest_over_time || [];
+                        if (webData.length) {
+                            labels = webData.map(d => {
+                                const date = new Date(d.date);
+                                return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                            });
+                        }
+
+                        for (const [platform, config] of Object.entries(platformConfig)) {
+                            const platData = mp[platform]?.interest_over_time;
+                            if (!platData || !platData.length) continue;
+
+                            const key = platform === 'tiktok' ? 'tiktok' : primaryKw;
+                            const values = platData.map(d => d[key] || 0);
+
+                            // If this platform has different length, use its own labels
+                            if (!labels.length) {
+                                labels = platData.map(d => {
+                                    const date = new Date(d.date);
+                                    return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                                });
+                            }
+
+                            datasets.push({
+                                label: config.label,
+                                data: values,
+                                borderColor: config.color,
+                                backgroundColor: config.color + '15',
+                                borderDash: config.dash,
+                                fill: false,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                pointHoverRadius: 5,
+                                borderWidth: 2,
+                            });
+                        }
+                    }
+
+                    // Fallback: single Google Web line from interest_over_time
+                    if (!datasets.length) {
+                        const timeData = this.trendsData.interest_over_time;
+                        labels = timeData.map(d => {
+                            const date = new Date(d.date);
+                            return date.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+                        });
+
+                        const keywords = Object.keys(timeData[0] || {}).filter(k => k !== 'date' && k !== 'isPartial');
+                        const colors = ['#3b82f6', '#ef4444', '#22c55e', '#f59e0b', '#8b5cf6'];
+
+                        keywords.forEach((keyword, idx) => {
+                            datasets.push({
+                                label: keyword,
+                                data: timeData.map(d => d[keyword] || 0),
+                                borderColor: colors[idx % colors.length],
+                                backgroundColor: colors[idx % colors.length] + '20',
+                                fill: true,
+                                tension: 0.4,
+                                pointRadius: 0,
+                                pointHoverRadius: 4,
+                            });
+                        });
+                    }
 
                     this.trendsChart = new Chart(ctx, {
                         type: 'line',
-                        data: {
-                            labels: labels,
-                            datasets: datasets
-                        },
+                        data: { labels, datasets },
                         options: {
                             responsive: true,
                             maintainAspectRatio: false,
-                            interaction: {
-                                intersect: false,
-                                mode: 'index'
-                            },
+                            interaction: { intersect: false, mode: 'index' },
                             plugins: {
                                 legend: {
-                                    display: keywords.length > 1,
+                                    display: true,
                                     position: 'top',
-                                    labels: {
-                                        boxWidth: 12,
-                                        padding: 8,
-                                        font: { size: 11 }
-                                    }
+                                    labels: { boxWidth: 12, padding: 8, font: { size: 11 } }
                                 },
                                 tooltip: {
                                     backgroundColor: 'white',
@@ -1261,7 +1183,13 @@ Generated by Total Demand — Cross-Platform Demand Intelligence`;
                                     grid: { color: '#f1f5f9' },
                                     ticks: {
                                         font: { size: 10 },
-                                        callback: (value) => value + '%'
+                                        callback: (value) => value
+                                    },
+                                    title: {
+                                        display: true,
+                                        text: 'Interest (0-100)',
+                                        font: { size: 10 },
+                                        color: '#94a3b8'
                                     }
                                 }
                             }
@@ -1278,19 +1206,90 @@ Generated by Total Demand — Cross-Platform Demand Intelligence`;
                     return 0;
                 },
 
-                formatLargeNumber(num) {
-                    if (!num && num !== 0) return '—';
-                    if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
-                    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-                    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-                    return num.toLocaleString();
+                getOpportunities() {
+                    const opps = [];
+                    const platforms = this.results?.platforms || [];
+                    const trends = this.trendsData;
+
+                    // Platform gap detection
+                    const google = platforms.find(p => p.platform === 'google');
+                    const youtube = platforms.find(p => p.platform === 'youtube');
+                    const tiktok = platforms.find(p => p.platform === 'tiktok');
+
+                    if (google?.normalized_score > 40 && youtube?.normalized_score < 20) {
+                        opps.push({
+                            title: 'YouTube Video Opportunity',
+                            description: `High Google search (${google.normalized_score}/100) but low YouTube presence (${youtube.normalized_score}/100). Creating video content could capture unmet demand.`,
+                            priority: 'high',
+                            icon: 'fab fa-youtube text-red-500',
+                            iconBg: 'bg-red-100',
+                        });
+                    }
+
+                    if (google?.normalized_score > 30 && (!tiktok || tiktok.normalized_score < 15)) {
+                        opps.push({
+                            title: 'TikTok Content Gap',
+                            description: 'Strong search demand but low TikTok presence. Short-form video content could reach a new audience.',
+                            priority: 'medium',
+                            icon: 'fab fa-tiktok text-black',
+                            iconBg: 'bg-slate-100',
+                        });
+                    }
+
+                    // Rising demand from trends
+                    if (trends?.insights) {
+                        const trendUp = trends.insights.find(i => i.type === 'trend_up');
+                        if (trendUp) {
+                            opps.push({
+                                title: 'Rising Search Demand',
+                                description: trendUp.description,
+                                priority: 'high',
+                                icon: 'fas fa-arrow-trend-up text-green-600',
+                                iconBg: 'bg-green-100',
+                            });
+                        }
+                    }
+
+                    // Seasonality alert
+                    if (trends?.seasonality?.seasonality_strength === 'high') {
+                        opps.push({
+                            title: `Seasonal Peak: ${trends.seasonality.peak_month}`,
+                            description: `Interest peaks in ${trends.seasonality.peak_month} (index: ${trends.seasonality.peak_interest}). Plan campaigns and content ahead of the peak.`,
+                            priority: 'medium',
+                            icon: 'fas fa-calendar-alt text-amber-600',
+                            iconBg: 'bg-amber-100',
+                        });
+                    }
+
+                    // Social-to-search signal from correlation
+                    if (trends?.correlation_analysis?.insights?.length) {
+                        const leadInsight = trends.correlation_analysis.insights.find(i => i.includes('lead'));
+                        if (leadInsight) {
+                            opps.push({
+                                title: 'Social-to-Search Signal',
+                                description: leadInsight,
+                                priority: 'high',
+                                icon: 'fas fa-link text-indigo-600',
+                                iconBg: 'bg-indigo-100',
+                            });
+                        }
+                    }
+
+                    // Breakout queries
+                    if (trends?.rising_queries?.some(q => q.value === 'Breakout')) {
+                        const breakouts = trends.rising_queries.filter(q => q.value === 'Breakout').map(q => q.query).slice(0, 3);
+                        opps.push({
+                            title: 'Breakout Search Terms',
+                            description: `Explosive growth detected: ${breakouts.join(', ')}. These emerging terms represent immediate content opportunities.`,
+                            priority: 'high',
+                            icon: 'fas fa-rocket text-pink-600',
+                            iconBg: 'bg-pink-100',
+                        });
+                    }
+
+                    return opps;
                 },
 
-                getGenderPercent(group, gender) {
-                    const total = (group.male || 0) + (group.female || 0);
-                    if (total === 0) return 50;
-                    return Math.round(((group[gender] || 0) / total) * 100);
-                }
             };
         }
     </script>

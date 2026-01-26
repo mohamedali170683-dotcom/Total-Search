@@ -538,6 +538,111 @@ class GoogleTrendsClient:
             logger.warning(f"Failed to analyze seasonality: {e}")
             return None
 
+    async def get_multi_platform_trends(
+        self,
+        keywords: list[str],
+        timeframe: str = "today 12-m",
+        geo: str = "",
+    ) -> dict[str, Any]:
+        """
+        Get Google Trends data for multiple platforms (Web + YouTube).
+
+        Fetches interest-over-time for web search and YouTube search
+        sequentially, returning both series for cross-platform comparison.
+
+        Args:
+            keywords: Keywords to analyze (max 5).
+            timeframe: Google Trends timeframe.
+            geo: Geographic location (empty = worldwide).
+
+        Returns:
+            Dict with platform keys containing interest_over_time lists.
+        """
+        keywords = keywords[:5]
+
+        try:
+            loop = asyncio.get_event_loop()
+            data = await loop.run_in_executor(
+                None,
+                self._sync_get_multi_platform_trends,
+                keywords,
+                timeframe,
+                geo,
+            )
+            return data
+        except Exception as e:
+            logger.error(f"Failed to get multi-platform trends: {e}")
+            return {"platforms": {}, "error": str(e)}
+
+    def _sync_get_multi_platform_trends(
+        self,
+        keywords: list[str],
+        timeframe: str,
+        geo: str,
+    ) -> dict[str, Any]:
+        """Synchronous worker: fetch Google Trends for web and YouTube."""
+        import time
+
+        platforms: dict[str, Any] = {}
+
+        # --- Google Web Search (gprop="" is the default) ---
+        try:
+            self.pytrends.build_payload(
+                keywords,
+                cat=0,
+                timeframe=timeframe,
+                geo=geo if geo else "",
+            )
+            interest_df = self.pytrends.interest_over_time()
+
+            if not interest_df.empty:
+                time_series = []
+                for date, row in interest_df.iterrows():
+                    dt = date.to_pydatetime() if hasattr(date, "to_pydatetime") else date
+                    entry = {"date": dt.strftime("%Y-%m-%d")}
+                    for kw in keywords:
+                        if kw in row:
+                            entry[kw] = int(row[kw])
+                    time_series.append(entry)
+                platforms["google_web"] = {"interest_over_time": time_series}
+            else:
+                platforms["google_web"] = {"interest_over_time": []}
+        except Exception as e:
+            logger.warning(f"Google Web trends failed: {e}")
+            platforms["google_web"] = {"interest_over_time": [], "error": str(e)}
+
+        # Delay between calls to avoid rate limits
+        time.sleep(1)
+
+        # --- YouTube Search (gprop='youtube') ---
+        try:
+            self.pytrends.build_payload(
+                keywords,
+                cat=0,
+                timeframe=timeframe,
+                geo=geo if geo else "",
+                gprop="youtube",
+            )
+            yt_df = self.pytrends.interest_over_time()
+
+            if not yt_df.empty:
+                yt_series = []
+                for date, row in yt_df.iterrows():
+                    dt = date.to_pydatetime() if hasattr(date, "to_pydatetime") else date
+                    entry = {"date": dt.strftime("%Y-%m-%d")}
+                    for kw in keywords:
+                        if kw in row:
+                            entry[kw] = int(row[kw])
+                    yt_series.append(entry)
+                platforms["youtube"] = {"interest_over_time": yt_series}
+            else:
+                platforms["youtube"] = {"interest_over_time": []}
+        except Exception as e:
+            logger.warning(f"YouTube trends failed: {e}")
+            platforms["youtube"] = {"interest_over_time": [], "error": str(e)}
+
+        return {"platforms": platforms}
+
     async def get_trending_searches(
         self,
         country: str = "united_states",
