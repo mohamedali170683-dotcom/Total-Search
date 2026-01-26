@@ -2009,6 +2009,74 @@ async def get_daily_trending_searches(
         )
 
 
+# =============================================================================
+# Meta Audience Reach API
+# =============================================================================
+
+@app.get("/api/audience/reach")
+async def get_audience_reach(
+    keywords: str = Query(..., description="Comma-separated keywords"),
+    country: str = Query(default="US", description="Country code (US, DE, GB, etc.)"),
+    include_demographics: bool = Query(default=True, description="Include age/gender breakdown"),
+):
+    """
+    Get Meta (Facebook/Instagram) audience reach estimation for keywords.
+
+    Maps keywords to Meta interest categories and returns estimated
+    daily/monthly active users who can be reached. No ad spend required.
+    Returns 'not_configured' status if Meta credentials are missing.
+    """
+    try:
+        settings = get_settings()
+
+        if not settings.meta_configured:
+            return {
+                "status": "not_configured",
+                "message": "Meta Marketing API not configured. Add META_APP_ID, META_APP_SECRET, META_ACCESS_TOKEN, and META_AD_ACCOUNT_ID to your environment.",
+                "keywords": [],
+                "audience": None,
+            }
+
+        from src.clients.meta_ads import MetaAdsClient
+
+        keyword_list = [k.strip() for k in keywords.split(",") if k.strip()][:10]
+
+        if not keyword_list:
+            raise HTTPException(status_code=400, detail="At least one keyword is required")
+
+        country_upper = country.upper()
+
+        async with MetaAdsClient(settings=settings) as client:
+            data = await client.get_audience_reach(
+                keywords=keyword_list,
+                country_code=country_upper,
+            )
+
+            if include_demographics and data.get("primary_interest_id"):
+                demographics = await client.get_demographic_breakdown(
+                    interest_id=data["primary_interest_id"],
+                    interest_name=data.get("primary_interest_name", ""),
+                    country_code=country_upper,
+                )
+                data["demographics"] = demographics
+
+        return {
+            "status": "ok",
+            "keywords": keyword_list,
+            "country": country_upper,
+            "audience": data,
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        import traceback
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to get audience reach: {str(e)}\n{traceback.format_exc()}"
+        )
+
+
 def _generate_trends_insights(data: dict) -> list[dict]:
     """Generate actionable insights from Google Trends data."""
     insights = []

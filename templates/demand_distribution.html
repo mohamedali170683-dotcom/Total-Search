@@ -728,6 +728,152 @@
                     <p class="text-slate-400 text-xs mt-1">Includes trend charts, geographic hotspots, and rising queries</p>
                 </div>
             </div>
+
+            <!-- Meta Audience Reach Section -->
+            <div class="card p-6 mt-6" x-show="hasResults">
+                <div class="flex items-center justify-between mb-6">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">
+                            <i class="fab fa-meta text-blue-600 mr-2"></i>Audience Reach (Meta)
+                        </h3>
+                        <p class="text-sm text-slate-500 mt-1">Estimated reachable audience on Facebook &amp; Instagram</p>
+                    </div>
+                    <button
+                        @click="loadAudienceReach()"
+                        :disabled="audienceLoading"
+                        class="px-4 py-2 text-sm font-medium text-blue-600 bg-blue-50 hover:bg-blue-100 rounded-lg transition disabled:opacity-50"
+                    >
+                        <i :class="audienceLoading ? 'fas fa-circle-notch fa-spin' : 'fas fa-users'" class="mr-1"></i>
+                        <span x-text="audienceLoading ? 'Loading...' : (audienceData ? 'Refresh' : 'Load Audience')"></span>
+                    </button>
+                </div>
+
+                <!-- Not Configured State -->
+                <div x-show="audienceData?.status === 'not_configured'" class="text-center py-6">
+                    <i class="fas fa-cog text-3xl text-slate-300 mb-3"></i>
+                    <p class="text-slate-500 text-sm" x-text="audienceData?.message"></p>
+                </div>
+
+                <!-- Audience Data -->
+                <div x-show="audienceData?.status === 'ok'" x-cloak>
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Total Reach Card -->
+                        <div class="bg-gradient-to-br from-indigo-50 to-purple-50 rounded-xl p-5 border border-indigo-100">
+                            <p class="text-xs font-medium text-indigo-600 uppercase tracking-wide">Monthly Reachable Audience</p>
+                            <p class="text-3xl font-bold text-indigo-700 mt-2"
+                               x-text="formatLargeNumber(audienceData?.audience?.total_reach?.estimate_mau_upper_bound)"></p>
+                            <p class="text-xs text-indigo-400 mt-1">
+                                Range: <span x-text="formatLargeNumber(audienceData?.audience?.total_reach?.estimate_mau_lower_bound)"></span>
+                                &ndash; <span x-text="formatLargeNumber(audienceData?.audience?.total_reach?.estimate_mau_upper_bound)"></span>
+                            </p>
+                            <p class="text-xs text-indigo-400 mt-0.5">
+                                DAU: <span x-text="formatLargeNumber(audienceData?.audience?.total_reach?.estimate_dau)"></span>
+                            </p>
+                            <div class="flex items-center space-x-2 mt-3">
+                                <i class="fab fa-facebook text-blue-600"></i>
+                                <i class="fab fa-instagram text-pink-500"></i>
+                                <span class="text-xs text-slate-500">Facebook &amp; Instagram</span>
+                            </div>
+                        </div>
+
+                        <!-- Matched Keywords -->
+                        <div class="lg:col-span-2">
+                            <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                                <i class="fas fa-bullseye mr-1 text-indigo-500"></i>Keyword &rarr; Interest Mapping
+                            </h4>
+                            <div class="space-y-2">
+                                <template x-for="match in audienceData?.audience?.matched_keywords || []" :key="match.keyword">
+                                    <div class="flex items-center justify-between p-3 bg-slate-50 rounded-lg">
+                                        <div>
+                                            <span class="text-sm font-medium text-slate-800" x-text="match.keyword"></span>
+                                            <span class="text-xs text-slate-400 ml-2">
+                                                &rarr; <span x-text="match.interest_name"></span>
+                                            </span>
+                                        </div>
+                                        <div class="text-right">
+                                            <span class="text-sm font-semibold text-indigo-600" x-text="formatLargeNumber(match.estimate_mau_upper_bound)"></span>
+                                            <span class="text-xs text-slate-400"> MAU</span>
+                                        </div>
+                                    </div>
+                                </template>
+                                <!-- Unmatched keywords -->
+                                <template x-for="kw in audienceData?.audience?.unmatched_keywords || []" :key="kw">
+                                    <div class="flex items-center p-3 bg-amber-50 rounded-lg border border-amber-100">
+                                        <i class="fas fa-exclamation-triangle text-amber-400 mr-2"></i>
+                                        <span class="text-sm text-amber-700">
+                                            "<span x-text="kw"></span>" &mdash; no matching Meta interest found
+                                        </span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Demographics Breakdown -->
+                    <div x-show="audienceData?.audience?.demographics" class="mt-6 pt-6 border-t border-slate-200">
+                        <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                            <i class="fas fa-chart-bar mr-1 text-purple-500"></i>
+                            Demographic Breakdown
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                            <!-- Age Group Bars -->
+                            <div>
+                                <p class="text-xs text-slate-500 mb-2 uppercase tracking-wide">By Age Group (DAU)</p>
+                                <div class="space-y-2">
+                                    <template x-for="group in audienceData?.audience?.demographics?.age_groups || []" :key="group.range">
+                                        <div>
+                                            <div class="flex justify-between text-xs mb-1">
+                                                <span class="text-slate-600" x-text="group.range"></span>
+                                                <span class="text-slate-800 font-medium" x-text="formatLargeNumber(group.total)"></span>
+                                            </div>
+                                            <div class="h-3 bg-slate-100 rounded-full overflow-hidden flex">
+                                                <div class="h-full bg-blue-400 rounded-l-full"
+                                                     :style="'width:' + getGenderPercent(group, 'male') + '%'"
+                                                     :title="'Male: ' + formatLargeNumber(group.male)"></div>
+                                                <div class="h-full bg-pink-400 rounded-r-full"
+                                                     :style="'width:' + getGenderPercent(group, 'female') + '%'"
+                                                     :title="'Female: ' + formatLargeNumber(group.female)"></div>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="flex items-center space-x-4 mt-3 text-xs text-slate-400">
+                                    <span><span class="inline-block w-2.5 h-2.5 bg-blue-400 rounded-full mr-1"></span>Male</span>
+                                    <span><span class="inline-block w-2.5 h-2.5 bg-pink-400 rounded-full mr-1"></span>Female</span>
+                                </div>
+                            </div>
+                            <!-- Gender Split -->
+                            <div class="flex flex-col items-center justify-center">
+                                <p class="text-xs text-slate-500 mb-3 uppercase tracking-wide">Gender Split</p>
+                                <div class="flex items-center space-x-8">
+                                    <div class="text-center">
+                                        <i class="fas fa-mars text-blue-500 text-2xl"></i>
+                                        <p class="text-lg font-bold text-blue-600 mt-1"
+                                           x-text="Math.round((audienceData?.audience?.demographics?.gender_split?.male || 0) * 100) + '%'"></p>
+                                        <p class="text-xs text-slate-400">Male</p>
+                                    </div>
+                                    <div class="text-center">
+                                        <i class="fas fa-venus text-pink-500 text-2xl"></i>
+                                        <p class="text-lg font-bold text-pink-600 mt-1"
+                                           x-text="Math.round((audienceData?.audience?.demographics?.gender_split?.female || 0) * 100) + '%'"></p>
+                                        <p class="text-xs text-slate-400">Female</p>
+                                    </div>
+                                </div>
+                                <p class="text-xs text-slate-400 mt-3">
+                                    Total DAU: <span x-text="formatLargeNumber(audienceData?.audience?.demographics?.total_dau)"></span>
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div x-show="!audienceData && !audienceLoading" class="text-center py-8">
+                    <i class="fab fa-meta text-4xl text-slate-300 mb-3"></i>
+                    <p class="text-slate-500 text-sm">Click "Load Audience" to estimate reachable audience on Facebook &amp; Instagram</p>
+                    <p class="text-slate-400 text-xs mt-1">Uses Meta Marketing API (no ad spend required)</p>
+                </div>
+            </div>
         </div>
 
         <!-- Empty State -->
@@ -774,6 +920,8 @@
                 trendsData: null,
                 trendsLoading: false,
                 trendsChart: null,
+                audienceData: null,
+                audienceLoading: false,
 
                 get hasResults() {
                     return this.results && this.results.total_demand > 0;
@@ -819,6 +967,7 @@
                     this.isLoading = true;
                     this.results = null;
                     this.trendsData = null;  // Reset trends data for new search
+                    this.audienceData = null;  // Reset audience data for new search
 
                     try {
                         const params = new URLSearchParams({
@@ -1010,6 +1159,35 @@ Generated by Total Demand — Cross-Platform Demand Intelligence`;
                     }
                 },
 
+                async loadAudienceReach() {
+                    if (!this.searchQuery.trim()) return;
+
+                    this.audienceLoading = true;
+
+                    try {
+                        const params = new URLSearchParams({
+                            keywords: this.searchQuery,
+                            country: this.selectedCountry.toUpperCase(),
+                            include_demographics: 'true'
+                        });
+
+                        const response = await fetch(`/api/audience/reach?${params}`);
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.audienceData = data;
+                        } else {
+                            console.error('Audience reach error:', data);
+                            alert('Error loading audience data: ' + (data.detail || 'Failed to fetch audience reach'));
+                        }
+                    } catch (error) {
+                        console.error('Audience reach fetch error:', error);
+                        alert('Failed to load audience reach data. Please try again.');
+                    } finally {
+                        this.audienceLoading = false;
+                    }
+                },
+
                 renderTrendsChart() {
                     const ctx = document.getElementById('trendsChart');
                     if (!ctx || !this.trendsData?.interest_over_time) return;
@@ -1098,6 +1276,20 @@ Generated by Total Demand — Cross-Platform Demand Intelligence`;
                         return region.interest || region.value || region[Object.keys(region).find(k => k !== 'region' && k !== 'geoName')] || 0;
                     }
                     return 0;
+                },
+
+                formatLargeNumber(num) {
+                    if (!num && num !== 0) return '—';
+                    if (num >= 1000000000) return (num / 1000000000).toFixed(1) + 'B';
+                    if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
+                    if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
+                    return num.toLocaleString();
+                },
+
+                getGenderPercent(group, gender) {
+                    const total = (group.male || 0) + (group.female || 0);
+                    if (total === 0) return 50;
+                    return Math.round(((group[gender] || 0) / total) * 100);
                 }
             };
         }

@@ -28,6 +28,12 @@ class Settings(BaseSettings):
     junglescout_api_key: SecretStr = Field(default="", description="Jungle Scout API key")
     junglescout_api_key_name: str = Field(default="", description="Jungle Scout API key name")
 
+    # Meta Marketing API (optional — for Audience Reach)
+    meta_app_id: str = Field(default="", description="Meta App ID")
+    meta_app_secret: SecretStr = Field(default="", description="Meta App Secret")
+    meta_access_token: SecretStr = Field(default="", description="Meta Marketing API access token")
+    meta_ad_account_id: str = Field(default="", description="Meta Ad Account ID (without act_ prefix)")
+
     # Database
     database_url: str = Field(
         default="sqlite:///data/keywords.db",
@@ -56,6 +62,16 @@ class Settings(BaseSettings):
     def dataforseo_credentials(self) -> tuple[str, str]:
         """Get DataForSEO credentials as tuple."""
         return (self.dataforseo_login, self.dataforseo_password.get_secret_value())
+
+    @property
+    def meta_configured(self) -> bool:
+        """Check if Meta Marketing API credentials are configured."""
+        return bool(
+            self.meta_app_id
+            and self.meta_app_secret.get_secret_value()
+            and self.meta_access_token.get_secret_value()
+            and self.meta_ad_account_id
+        )
 
 
 @lru_cache
