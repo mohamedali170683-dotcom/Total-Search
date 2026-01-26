@@ -1225,7 +1225,10 @@ async def analyze_demand_distribution(
 
         return {
             "keywords": keyword_list,
-            "total_demand": distribution["total_volume"],
+            "total_demand": distribution["total_volume"],  # backward compat
+            "search_volume_total": distribution["search_volume_total"],
+            "social_engagement_total": distribution["social_engagement_total"],
+            "pinterest_interest": distribution["pinterest_interest"],
             "platforms": distribution["platforms"],
             "distribution_summary": distribution["summary"],
             "insights": distribution["insights"],
@@ -1420,16 +1423,26 @@ def _aggregate_keyword_metrics(metrics: list) -> dict:
 
 
 def _calculate_demand_distribution(keyword_data: dict) -> dict:
-    """Calculate demand distribution across platforms."""
-    platform_totals = {
-        "google": 0,
-        "youtube": 0,
-        "amazon": 0,
-        "tiktok": 0,
-        "instagram": 0,
-        "pinterest": 0,
+    """Calculate demand distribution across platforms with honest metric separation."""
+    SEARCH_PLATFORMS = {"google", "youtube", "amazon"}
+    SOCIAL_PLATFORMS = {"tiktok", "instagram"}
+    INTEREST_PLATFORMS = {"pinterest"}
+
+    METRIC_TYPE_MAP = {
+        "google": "search_volume", "youtube": "search_volume", "amazon": "search_volume",
+        "tiktok": "engagement", "instagram": "engagement",
+        "pinterest": "interest_index",
+    }
+    METRIC_LABEL_MAP = {
+        "search_volume": "Monthly Searches",
+        "engagement": "Engagement Score",
+        "interest_index": "Interest Index (0-100)",
     }
 
+    platform_totals = {
+        "google": 0, "youtube": 0, "amazon": 0,
+        "tiktok": 0, "instagram": 0, "pinterest": 0,
+    }
     platform_trends = {p: [] for p in platform_totals}
 
     # Aggregate volumes across all keywords
@@ -1439,53 +1452,72 @@ def _calculate_demand_distribution(keyword_data: dict) -> dict:
             if platform in platform_totals:
                 volume = metrics.get("volume", 0) if isinstance(metrics, dict) else 0
                 platform_totals[platform] += volume
-
                 trend = metrics.get("trend") if isinstance(metrics, dict) else None
                 if trend:
                     platform_trends[platform].append(trend)
 
-    # Calculate total
-    total_volume = sum(platform_totals.values())
+    # Compute honest totals by metric type
+    search_volume_total = sum(platform_totals[p] for p in SEARCH_PLATFORMS)
+    social_engagement_total = sum(platform_totals[p] for p in SOCIAL_PLATFORMS)
+    pinterest_interest = platform_totals.get("pinterest", 0)
+    total_volume = sum(platform_totals.values())  # kept for backward compat
 
-    # Build platform breakdown with percentages
+    # Build platform breakdown with within-group percentages
     platforms = []
     for platform, volume in sorted(platform_totals.items(), key=lambda x: -x[1]):
-        percentage = (volume / total_volume * 100) if total_volume > 0 else 0
+        metric_type = METRIC_TYPE_MAP[platform]
 
-        # Calculate aggregate trend for platform
+        # Compute percentage within the platform's own group
+        if platform in SEARCH_PLATFORMS:
+            group_total = search_volume_total
+        elif platform in SOCIAL_PLATFORMS:
+            group_total = social_engagement_total
+        else:
+            group_total = 100  # Pinterest is 0-100 index
+
+        group_percentage = (volume / group_total * 100) if group_total > 0 else 0
+
+        # Also compute share of overall total (for backward compat)
+        overall_percentage = (volume / total_volume * 100) if total_volume > 0 else 0
+
+        # Aggregate trend
         trends = platform_trends[platform]
         if trends:
             growing = trends.count("growing")
             declining = trends.count("declining")
-            if growing > declining:
-                trend = "growing"
-            elif declining > growing:
-                trend = "declining"
-            else:
-                trend = "stable"
+            trend = "growing" if growing > declining else ("declining" if declining > growing else "stable")
         else:
             trend = "stable"
 
         platforms.append({
             "platform": platform,
             "volume": volume,
-            "percentage": round(percentage, 1),
+            "percentage": round(group_percentage, 1),
+            "overall_percentage": round(overall_percentage, 1),
+            "metric_type": metric_type,
+            "metric_label": METRIC_LABEL_MAP[metric_type],
             "trend": trend,
             "display_name": _get_platform_display_name(platform),
             "icon": _get_platform_icon(platform),
             "color": _get_platform_color(platform),
         })
 
-    # Generate summary
-    google_share = platform_totals["google"] / total_volume * 100 if total_volume > 0 else 0
-    non_google_share = 100 - google_share
+    # Generate summary with honest separation
+    google_search_share = (platform_totals["google"] / search_volume_total * 100) if search_volume_total > 0 else 0
+    non_google_search_share = 100 - google_search_share
 
     summary = {
-        "total_volume": total_volume,
-        "google_share": round(google_share, 1),
-        "non_google_share": round(non_google_share, 1),
+        "search_volume_total": search_volume_total,
+        "social_engagement_total": social_engagement_total,
+        "pinterest_interest": pinterest_interest,
+        "total_volume": total_volume,  # backward compat
+        "google_search_share": round(google_search_share, 1),
+        "non_google_search_share": round(non_google_search_share, 1),
         "top_platform": platforms[0]["platform"] if platforms else None,
         "platform_count": len([p for p in platforms if p["volume"] > 0]),
+        # Deprecated - kept for backward compat
+        "google_share": round(google_search_share, 1),
+        "non_google_share": round(non_google_search_share, 1),
     }
 
     # Generate insights
@@ -1495,7 +1527,10 @@ def _calculate_demand_distribution(keyword_data: dict) -> dict:
     recommendations = _generate_demand_recommendations(platforms, summary)
 
     return {
-        "total_volume": total_volume,
+        "total_volume": total_volume,  # backward compat
+        "search_volume_total": search_volume_total,
+        "social_engagement_total": social_engagement_total,
+        "pinterest_interest": pinterest_interest,
         "platforms": platforms,
         "summary": summary,
         "insights": insights,
@@ -1543,63 +1578,74 @@ def _get_platform_color(platform: str) -> str:
 
 
 def _generate_demand_insights(platforms: list, summary: dict) -> list[dict]:
-    """Generate insights about demand distribution."""
+    """Generate insights about demand distribution using honest metric-aware language."""
     insights = []
 
-    # Insight: Non-Google opportunity
-    if summary["non_google_share"] > 40:
+    search_total = summary.get("search_volume_total", summary.get("total_volume", 0))
+    social_total = summary.get("social_engagement_total", 0)
+
+    # Insight: Search diversification (YouTube + Amazon share of search volume)
+    non_google_search = summary.get("non_google_search_share", summary.get("non_google_share", 0))
+    if non_google_search > 20:
         insights.append({
             "type": "opportunity",
-            "title": f"{summary['non_google_share']}% of demand is outside Google",
-            "description": "A significant portion of search demand exists on other platforms. Consider diversifying your search strategy.",
+            "title": f"{non_google_search}% of search volume is on YouTube & Amazon",
+            "description": "A meaningful share of actual search queries happens outside Google. Diversify your search strategy across YouTube and Amazon.",
             "priority": "high",
         })
 
-    # Insight: Platform-specific opportunities
+    # Insight: Platform-specific growth (metric-aware language)
     for p in platforms:
         if p["volume"] > 0 and p["trend"] == "growing":
+            metric_type = p.get("metric_type", "search_volume")
+            if metric_type == "search_volume":
+                desc = f"Search volume on {p['display_name']} is trending upward. This platform may warrant increased investment."
+            elif metric_type == "engagement":
+                desc = f"Audience engagement on {p['display_name']} is growing. More content is being created around this topic."
+            else:
+                desc = f"Interest on {p['display_name']} is trending upward."
             insights.append({
                 "type": "trend",
-                "title": f"{p['display_name']} demand is growing",
-                "description": f"Search volume on {p['display_name']} is trending upward. This platform may warrant increased investment.",
+                "title": f"{p['display_name']} activity is growing",
+                "description": desc,
                 "priority": "medium",
                 "platform": p["platform"],
             })
 
-    # Insight: Amazon for e-commerce
+    # Insight: Amazon for e-commerce (percentage of search volume only)
     amazon_data = next((p for p in platforms if p["platform"] == "amazon"), None)
-    if amazon_data and amazon_data["percentage"] > 15:
-        insights.append({
-            "type": "ecommerce",
-            "title": f"{amazon_data['percentage']}% of demand is on Amazon",
-            "description": "Strong purchase intent signals. Ensure your Amazon presence and advertising are optimized.",
-            "priority": "high",
-            "platform": "amazon",
-        })
+    if amazon_data and search_total > 0:
+        amazon_search_share = round(amazon_data["volume"] / search_total * 100, 1)
+        if amazon_search_share > 15:
+            insights.append({
+                "type": "ecommerce",
+                "title": f"{amazon_search_share}% of search volume is on Amazon",
+                "description": "Strong purchase intent signals. Ensure your Amazon presence and advertising are optimized.",
+                "priority": "high",
+                "platform": "amazon",
+            })
 
-    # Insight: Social search (TikTok + Instagram)
-    social_volume = sum(p["volume"] for p in platforms if p["platform"] in ["tiktok", "instagram"])
-    social_percentage = (social_volume / summary["total_volume"] * 100) if summary["total_volume"] > 0 else 0
-    if social_percentage > 10:
+    # Insight: Social engagement signals (NOT "demand" or "search volume")
+    if social_total > 0:
         insights.append({
             "type": "social",
-            "title": f"{round(social_percentage, 1)}% of demand is on social platforms",
-            "description": "Social search is significant for this query. Consider content strategies for TikTok and Instagram.",
+            "title": "Active social engagement detected",
+            "description": f"TikTok and Instagram show a combined engagement score of {social_total:,}. This reflects content creation and audience interaction, not search queries. Consider content strategies for these platforms.",
             "priority": "medium",
         })
 
-    # Insight: Pinterest for visual/lifestyle
+    # Insight: Pinterest interest
     pinterest_data = next((p for p in platforms if p["platform"] == "pinterest"), None)
-    if pinterest_data and pinterest_data["percentage"] > 8:
+    if pinterest_data and pinterest_data["volume"] > 30:
         insights.append({
             "type": "visual",
-            "title": f"{pinterest_data['percentage']}% of demand is on Pinterest",
-            "description": "Pinterest users are in planning/aspiration mode. Create visual content and shopping pins.",
+            "title": f"Pinterest interest index: {pinterest_data['volume']}/100",
+            "description": "Pinterest users are in planning/aspiration mode. This is a relative popularity score, not a search count. Create visual content and shopping pins.",
             "priority": "medium",
             "platform": "pinterest",
         })
 
-    return insights[:5]  # Limit to top 5 insights
+    return insights[:5]
 
 
 def _generate_demand_recommendations(platforms: list, summary: dict) -> list[dict]:

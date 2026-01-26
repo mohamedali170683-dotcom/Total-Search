@@ -138,14 +138,14 @@
                 <!-- Total volumes -->
                 <div class="grid grid-cols-2 gap-8 mt-8">
                     <div class="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                        <p class="text-sm text-blue-400 mb-1">Your Brand Total Demand</p>
-                        <p class="text-3xl font-bold" x-text="formatNumber(results?.brand?.total_demand || 0)"></p>
-                        <p class="text-xs text-gray-400 mt-1">monthly searches</p>
+                        <p class="text-sm text-blue-400 mb-1">Your Brand Search Volume</p>
+                        <p class="text-3xl font-bold" x-text="formatNumber(results?.brand?.search_volume_total || results?.brand?.total_demand || 0)"></p>
+                        <p class="text-xs text-gray-400 mt-1">monthly searches (Google + YouTube + Amazon)</p>
                     </div>
                     <div class="text-center p-4 bg-red-500/10 rounded-lg border border-red-500/30">
-                        <p class="text-sm text-red-400 mb-1">Competitor Total Demand</p>
-                        <p class="text-3xl font-bold" x-text="formatNumber(results?.competitor?.total_demand || 0)"></p>
-                        <p class="text-xs text-gray-400 mt-1">monthly searches</p>
+                        <p class="text-sm text-red-400 mb-1">Competitor Search Volume</p>
+                        <p class="text-3xl font-bold" x-text="formatNumber(results?.competitor?.search_volume_total || results?.competitor?.total_demand || 0)"></p>
+                        <p class="text-xs text-gray-400 mt-1">monthly searches (Google + YouTube + Amazon)</p>
                     </div>
                 </div>
 
@@ -380,13 +380,13 @@
                         'Competitive Share of Voice Report',
                         '================================',
                         '',
-                        'Overall Share of Voice:',
+                        'Overall Share of Voice (search platforms):',
                         `  Your Brand: ${this.results.share_of_voice.overall.brand}%`,
                         `  Competitor: ${this.results.share_of_voice.overall.competitor}%`,
                         '',
-                        'Total Demand:',
-                        `  Your Brand: ${this.formatNumber(this.results.brand.total_demand)}`,
-                        `  Competitor: ${this.formatNumber(this.results.competitor.total_demand)}`,
+                        'Search Volume (Google + YouTube + Amazon):',
+                        `  Your Brand: ${this.formatNumber(this.results.brand.search_volume_total || this.results.brand.total_demand)}`,
+                        `  Competitor: ${this.formatNumber(this.results.competitor.search_volume_total || this.results.competitor.total_demand)}`,
                         '',
                         'By Platform:',
                     ];
@@ -422,13 +422,13 @@
                         'Competitive Share of Voice Report',
                         '================================',
                         '',
-                        'Overall Share of Voice:',
+                        'Overall Share of Voice (search platforms):',
                         `  Your Brand: ${this.results.share_of_voice.overall.brand}%`,
                         `  Competitor: ${this.results.share_of_voice.overall.competitor}%`,
                         '',
-                        'Total Demand:',
-                        `  Your Brand: ${this.formatNumber(this.results.brand.total_demand)}`,
-                        `  Competitor: ${this.formatNumber(this.results.competitor.total_demand)}`,
+                        'Search Volume (Google + YouTube + Amazon):',
+                        `  Your Brand: ${this.formatNumber(this.results.brand.search_volume_total || this.results.brand.total_demand)}`,
+                        `  Competitor: ${this.formatNumber(this.results.competitor.search_volume_total || this.results.competitor.total_demand)}`,
                         '',
                         'By Platform:',
                     ];

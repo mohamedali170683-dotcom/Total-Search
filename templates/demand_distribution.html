@@ -180,24 +180,27 @@
             <!-- Summary Stats Row -->
             <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 <div class="card card-hover p-5">
-                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Total Demand</p>
-                    <p class="text-2xl font-bold text-slate-900 mt-1" x-text="formatNumber(results?.total_demand || 0)"></p>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Search Volume</p>
+                    <p class="text-2xl font-bold text-slate-900 mt-1" x-text="formatNumber(results?.search_volume_total || 0)"></p>
                     <p class="text-xs text-slate-400 mt-1">monthly searches</p>
+                    <p class="text-[10px] text-slate-300 mt-0.5">Google + YouTube + Amazon</p>
                 </div>
                 <div class="card card-hover p-5">
-                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Platforms</p>
-                    <p class="text-2xl font-bold text-slate-900 mt-1" x-text="(results?.platforms || []).filter(p => p.volume > 0).length"></p>
-                    <p class="text-xs text-slate-400 mt-1">with active demand</p>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Social Engagement</p>
+                    <p class="text-2xl font-bold text-amber-600 mt-1" x-text="formatNumber(results?.social_engagement_total || 0)"></p>
+                    <p class="text-xs text-slate-400 mt-1">engagement score</p>
+                    <p class="text-[10px] text-slate-300 mt-0.5">TikTok + Instagram</p>
                 </div>
                 <div class="card card-hover p-5">
-                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Top Platform</p>
-                    <p class="text-2xl font-bold text-slate-900 mt-1" x-text="getTopPlatform()?.display_name || '-'"></p>
-                    <p class="text-xs text-slate-400 mt-1" x-text="getTopPlatform()?.percentage + '% share' || ''"></p>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Pinterest Interest</p>
+                    <p class="text-2xl font-bold text-purple-600 mt-1" x-text="(results?.pinterest_interest || 0) + '/100'"></p>
+                    <p class="text-xs text-slate-400 mt-1">interest index</p>
+                    <p class="text-[10px] text-slate-300 mt-0.5">Relative popularity</p>
                 </div>
                 <div class="card card-hover p-5">
-                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Outside Google</p>
-                    <p class="text-2xl font-bold text-blue-600 mt-1" x-text="results?.distribution_summary?.non_google_share + '%'"></p>
-                    <p class="text-xs text-slate-400 mt-1">untapped opportunity</p>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Active Platforms</p>
+                    <p class="text-2xl font-bold text-blue-600 mt-1" x-text="(results?.platforms || []).filter(p => p.volume > 0).length"></p>
+                    <p class="text-xs text-slate-400 mt-1">with data</p>
                 </div>
             </div>
 
@@ -206,7 +209,7 @@
                 <!-- Platform Distribution Chart -->
                 <div class="lg:col-span-2 card p-6">
                     <div class="flex items-center justify-between mb-6">
-                        <h3 class="text-lg font-semibold text-slate-900">Platform Distribution</h3>
+                        <h3 class="text-lg font-semibold text-slate-900">Search Volume Distribution</h3>
                         <div class="flex space-x-2">
                             <button @click="exportPDF()" class="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
                                 <i class="fas fa-file-pdf mr-1"></i> PDF
@@ -218,62 +221,100 @@
                     </div>
 
                     <div class="flex flex-col lg:flex-row gap-8">
-                        <!-- Chart -->
+                        <!-- Chart (search platforms only) -->
                         <div class="w-full lg:w-2/5 flex items-center justify-center">
                             <div class="relative">
                                 <canvas id="distributionChart" width="220" height="220"></canvas>
                                 <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                                     <div class="text-center">
-                                        <p class="text-2xl font-bold text-slate-900" x-text="formatNumber(results?.total_demand || 0)"></p>
-                                        <p class="text-xs text-slate-500">total</p>
+                                        <p class="text-2xl font-bold text-slate-900" x-text="formatNumber(results?.search_volume_total || 0)"></p>
+                                        <p class="text-xs text-slate-500">searches/mo</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- Platform Bars -->
-                        <div class="flex-1 space-y-3">
-                            <template x-for="platform in results?.platforms || []" :key="platform.platform">
-                                <div class="flex items-center group">
-                                    <div class="w-8 h-8 rounded-lg flex items-center justify-center" :style="'background-color: ' + platform.color + '15'">
-                                        <i :class="platform.icon" :style="'color: ' + platform.color" class="text-sm"></i>
-                                    </div>
-                                    <div class="flex-1 ml-3">
-                                        <div class="flex justify-between text-sm mb-1">
-                                            <div class="flex items-center space-x-2">
+                        <!-- Search Platform Bars + Social Signals -->
+                        <div class="flex-1">
+                            <!-- Search Platforms -->
+                            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                                <i class="fas fa-search mr-1"></i> Search Platforms
+                                <span class="text-slate-300 font-normal normal-case ml-1">(monthly searches)</span>
+                            </p>
+                            <div class="space-y-3 mb-5">
+                                <template x-for="platform in getSearchPlatforms()" :key="platform.platform">
+                                    <div class="flex items-center group">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center" :style="'background-color: ' + platform.color + '15'">
+                                            <i :class="platform.icon" :style="'color: ' + platform.color" class="text-sm"></i>
+                                        </div>
+                                        <div class="flex-1 ml-3">
+                                            <div class="flex justify-between text-sm mb-1">
                                                 <span class="font-medium text-slate-700" x-text="platform.display_name"></span>
-                                                <span
-                                                    x-show="platform.platform === 'tiktok' || platform.platform === 'instagram'"
-                                                    class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium"
-                                                    :title="platform.platform === 'tiktok'
-                                                        ? 'Calculated from hashtag views, video count & posting velocity'
-                                                        : 'Calculated from hashtag posts, posting frequency & media interactions'"
-                                                >engagement</span>
-                                                <span
-                                                    x-show="platform.platform === 'pinterest'"
-                                                    class="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium"
-                                                    title="Relative popularity score (0-100) from Pinterest Trends"
-                                                >interest index</span>
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="text-slate-900 font-semibold" x-text="formatNumber(platform.volume)"></span>
+                                                    <span class="text-slate-400 text-xs" x-text="'(' + platform.percentage + '%)'"></span>
+                                                </div>
                                             </div>
-                                            <div class="flex items-center space-x-2">
-                                                <span class="text-slate-900 font-semibold" x-text="formatNumber(platform.volume)"></span>
-                                                <span class="text-slate-400 text-xs" x-text="'(' + platform.percentage + '%)'"></span>
+                                            <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                                <div class="h-full rounded-full platform-bar" :style="'width: ' + Math.max(platform.percentage, 1) + '%; background-color: ' + platform.color"></div>
                                             </div>
                                         </div>
-                                        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                            <div
-                                                class="h-full rounded-full platform-bar"
-                                                :style="'width: ' + Math.max(platform.percentage, 1) + '%; background-color: ' + platform.color"
-                                            ></div>
+                                        <div class="w-10 text-right ml-3">
+                                            <span x-show="platform.trend === 'growing'" class="text-green-500 text-sm"><i class="fas fa-arrow-up"></i></span>
+                                            <span x-show="platform.trend === 'declining'" class="text-red-500 text-sm"><i class="fas fa-arrow-down"></i></span>
+                                            <span x-show="platform.trend === 'stable' || !platform.trend" class="text-slate-300 text-sm"><i class="fas fa-minus"></i></span>
                                         </div>
                                     </div>
-                                    <div class="w-10 text-right ml-3">
-                                        <span x-show="platform.trend === 'growing'" class="text-green-500 text-sm"><i class="fas fa-arrow-up"></i></span>
-                                        <span x-show="platform.trend === 'declining'" class="text-red-500 text-sm"><i class="fas fa-arrow-down"></i></span>
-                                        <span x-show="platform.trend === 'stable' || !platform.trend" class="text-slate-300 text-sm"><i class="fas fa-minus"></i></span>
+                                </template>
+                            </div>
+
+                            <!-- Divider -->
+                            <div class="border-t border-dashed border-slate-200 my-4"></div>
+
+                            <!-- Social & Discovery Signals -->
+                            <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+                                <i class="fas fa-hashtag mr-1"></i> Social & Discovery Signals
+                            </p>
+                            <div class="space-y-3">
+                                <template x-for="platform in getSocialPlatforms()" :key="platform.platform">
+                                    <div class="flex items-center group">
+                                        <div class="w-8 h-8 rounded-lg flex items-center justify-center" :style="'background-color: ' + platform.color + '15'">
+                                            <i :class="platform.icon" :style="'color: ' + platform.color" class="text-sm"></i>
+                                        </div>
+                                        <div class="flex-1 ml-3">
+                                            <div class="flex justify-between text-sm mb-1">
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="font-medium text-slate-700" x-text="platform.display_name"></span>
+                                                    <span
+                                                        x-show="platform.metric_type === 'engagement'"
+                                                        class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium"
+                                                        :title="platform.platform === 'tiktok'
+                                                            ? 'Calculated from hashtag views, video count & posting velocity'
+                                                            : 'Calculated from hashtag posts, posting frequency & media interactions'"
+                                                    >engagement</span>
+                                                    <span
+                                                        x-show="platform.metric_type === 'interest_index'"
+                                                        class="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium"
+                                                        title="Relative popularity score (0-100) from Pinterest Trends"
+                                                    >interest index</span>
+                                                </div>
+                                                <div class="flex items-center space-x-2">
+                                                    <span class="text-slate-900 font-semibold" x-text="formatNumber(platform.volume)"></span>
+                                                    <span class="text-slate-400 text-xs" x-text="platform.metric_label"></span>
+                                                </div>
+                                            </div>
+                                            <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
+                                                <div class="h-full rounded-full platform-bar" :style="'width: ' + Math.max(platform.percentage, 1) + '%; background-color: ' + platform.color"></div>
+                                            </div>
+                                        </div>
+                                        <div class="w-10 text-right ml-3">
+                                            <span x-show="platform.trend === 'growing'" class="text-green-500 text-sm"><i class="fas fa-arrow-up"></i></span>
+                                            <span x-show="platform.trend === 'declining'" class="text-red-500 text-sm"><i class="fas fa-arrow-down"></i></span>
+                                            <span x-show="platform.trend === 'stable' || !platform.trend" class="text-slate-300 text-sm"><i class="fas fa-minus"></i></span>
+                                        </div>
                                     </div>
-                                </div>
-                            </template>
+                                </template>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -282,20 +323,37 @@
                 <div class="card p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
                     <h3 class="text-lg font-semibold text-slate-900 mb-4">Key Insight</h3>
 
-                    <div class="text-center py-6">
-                        <p class="text-5xl font-bold text-blue-600" x-text="results?.distribution_summary?.non_google_share + '%'"></p>
-                        <p class="text-slate-600 mt-2 font-medium">of demand exists<br>outside Google</p>
+                    <div class="text-center py-4">
+                        <p class="text-4xl font-bold text-blue-600" x-text="results?.distribution_summary?.non_google_search_share + '%'"></p>
+                        <p class="text-slate-600 mt-2 font-medium text-sm">of <strong>search volume</strong><br>is outside Google</p>
+                        <p class="text-xs text-slate-400 mt-1">(YouTube + Amazon share)</p>
                     </div>
 
-                    <div class="bg-white/60 rounded-xl p-4 mt-4">
+                    <div class="bg-white/60 rounded-xl p-4 mt-3">
                         <p class="text-sm text-slate-600">
-                            If you're only running Google Ads, you're missing
-                            <span class="font-bold text-slate-900" x-text="formatNumber(Math.round(results?.total_demand * (results?.distribution_summary?.non_google_share / 100)))"></span>
-                            potential monthly searches.
+                            <span class="font-bold text-slate-900" x-text="formatNumber(Math.round((results?.search_volume_total || 0) * ((results?.distribution_summary?.non_google_search_share || 0) / 100)))"></span>
+                            monthly searches happen on YouTube & Amazon.
                         </p>
                     </div>
 
-                    <div class="mt-4 pt-4 border-t border-blue-100">
+                    <!-- Social signals summary -->
+                    <div class="mt-3 bg-white/40 rounded-xl p-3 space-y-2">
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Social Signals</p>
+                        <div class="flex items-center justify-between text-sm" x-show="getSocialPlatformByName('tiktok')?.volume > 0">
+                            <span class="text-slate-600"><i class="fab fa-tiktok mr-1 text-slate-700"></i> TikTok</span>
+                            <span class="font-semibold text-slate-800" x-text="formatNumber(getSocialPlatformByName('tiktok')?.volume || 0) + ' engagement'"></span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm" x-show="getSocialPlatformByName('instagram')?.volume > 0">
+                            <span class="text-slate-600"><i class="fab fa-instagram mr-1 text-pink-500"></i> Instagram</span>
+                            <span class="font-semibold text-slate-800" x-text="formatNumber(getSocialPlatformByName('instagram')?.volume || 0) + ' engagement'"></span>
+                        </div>
+                        <div class="flex items-center justify-between text-sm" x-show="(results?.pinterest_interest || 0) > 0">
+                            <span class="text-slate-600"><i class="fab fa-pinterest mr-1 text-red-600"></i> Pinterest</span>
+                            <span class="font-semibold text-slate-800" x-text="(results?.pinterest_interest || 0) + '/100 interest'"></span>
+                        </div>
+                    </div>
+
+                    <div class="mt-3 pt-3 border-t border-blue-100">
                         <p class="text-xs text-slate-500">
                             <i class="fas fa-globe mr-1"></i>
                             Data for: <span x-text="getCountryName()" class="font-medium"></span>
@@ -407,7 +465,10 @@
                                     <i class="fab fa-amazon text-orange-500 mr-1"></i>Amazon
                                     <span class="w-1.5 h-1.5 bg-green-500 rounded-full inline-block ml-1"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Score: Calculated from hashtag views, video count, and posting frequency. NOT search volume.">
+                                <th class="pb-3 px-3 text-right font-semibold text-blue-600 bg-blue-50/50" title="Sum of Google + YouTube + Amazon search volumes">
+                                    <i class="fas fa-search text-blue-400 mr-1"></i>Search Total
+                                </th>
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500 border-l-2 border-slate-200" title="Engagement Score: Calculated from hashtag views, video count, and posting frequency. NOT search volume.">
                                     <i class="fab fa-tiktok text-slate-700 mr-1"></i>TikTok
                                     <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1" title="Engagement metric"></span>
                                 </th>
@@ -429,7 +490,8 @@
                                     <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.google?.volume || 0)"></td>
                                     <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.youtube?.volume || 0)"></td>
                                     <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.amazon?.volume || 0)"></td>
-                                    <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.tiktok?.volume || 0)"></td>
+                                    <td class="py-3 px-3 text-right font-semibold text-blue-700 bg-blue-50/30" x-text="formatNumber((data.platforms?.google?.volume || 0) + (data.platforms?.youtube?.volume || 0) + (data.platforms?.amazon?.volume || 0))"></td>
+                                    <td class="py-3 px-3 text-right text-slate-600 border-l-2 border-slate-100" x-text="formatNumber(data.platforms?.tiktok?.volume || 0)"></td>
                                     <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.instagram?.volume || 0)"></td>
                                     <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.pinterest?.volume || 0)"></td>
                                     <td class="py-3 pl-3 text-center">
@@ -695,6 +757,18 @@
                     return this.results.platforms.reduce((max, p) => p.volume > (max?.volume || 0) ? p : max, null);
                 },
 
+                getSearchPlatforms() {
+                    return (this.results?.platforms || []).filter(p => p.metric_type === 'search_volume');
+                },
+
+                getSocialPlatforms() {
+                    return (this.results?.platforms || []).filter(p => p.metric_type === 'engagement' || p.metric_type === 'interest_index');
+                },
+
+                getSocialPlatformByName(name) {
+                    return (this.results?.platforms || []).find(p => p.platform === name);
+                },
+
                 hasDataQualityIssue() {
                     if (!this.results?.platforms) return false;
                     const youtube = this.results.platforms.find(p => p.platform === 'youtube');
@@ -746,7 +820,8 @@
                         this.chart.destroy();
                     }
 
-                    const platforms = this.results?.platforms || [];
+                    // Only show search platforms in the doughnut chart
+                    const platforms = this.getSearchPlatforms();
 
                     this.chart = new Chart(ctx, {
                         type: 'doughnut',
@@ -777,7 +852,7 @@
                                             const value = context.raw;
                                             const total = context.dataset.data.reduce((a, b) => a + b, 0);
                                             const percentage = ((value / total) * 100).toFixed(1);
-                                            return `${context.label}: ${this.formatNumber(value)} (${percentage}%)`;
+                                            return `${context.label}: ${this.formatNumber(value)} searches (${percentage}%)`;
                                         }
                                     }
                                 }
@@ -798,14 +873,16 @@
 
                 exportCSV() {
                     if (!this.results) return;
-                    const headers = ['Keyword', 'Google', 'YouTube', 'Amazon', 'TikTok', 'Instagram', 'Pinterest', 'Best Platform'];
+                    const headers = ['Keyword', 'Google (searches)', 'YouTube (searches)', 'Amazon (searches)', 'Search Total', 'TikTok (engagement)', 'Instagram (engagement)', 'Pinterest (interest 0-100)', 'Best Platform'];
                     const rows = [headers.join(',')];
                     for (const [keyword, data] of Object.entries(this.results.keyword_details || {})) {
+                        const g = data.platforms?.google?.volume || 0;
+                        const y = data.platforms?.youtube?.volume || 0;
+                        const a = data.platforms?.amazon?.volume || 0;
                         const row = [
                             `"${keyword}"`,
-                            data.platforms?.google?.volume || 0,
-                            data.platforms?.youtube?.volume || 0,
-                            data.platforms?.amazon?.volume || 0,
+                            g, y, a,
+                            g + y + a,
                             data.platforms?.tiktok?.volume || 0,
                             data.platforms?.instagram?.volume || 0,
                             data.platforms?.pinterest?.volume || 0,
@@ -824,14 +901,22 @@
 
                 copyToClipboard() {
                     if (!this.results) return;
+                    const searchPlatforms = this.getSearchPlatforms();
+                    const socialPlatforms = this.getSocialPlatforms().filter(p => p.metric_type === 'engagement');
+                    const pinterest = this.getSocialPlatforms().find(p => p.metric_type === 'interest_index');
+
                     const summary = `Demand Distribution Analysis (${this.getCountryName()})
 ============================
-Total Demand: ${this.formatNumber(this.results.total_demand)} monthly searches
 
-Platform Breakdown:
-${this.results.platforms.map(p => `- ${p.display_name}: ${this.formatNumber(p.volume)} (${p.percentage}%)`).join('\n')}
+Search Volume: ${this.formatNumber(this.results.search_volume_total)} monthly searches (Google + YouTube + Amazon)
+${searchPlatforms.map(p => `  - ${p.display_name}: ${this.formatNumber(p.volume)} (${p.percentage}%)`).join('\n')}
 
-Key Insight: ${this.results.distribution_summary.non_google_share}% of demand is outside Google
+Social Engagement: ${this.formatNumber(this.results.social_engagement_total)} engagement score (TikTok + Instagram)
+${socialPlatforms.map(p => `  - ${p.display_name}: ${this.formatNumber(p.volume)} engagement`).join('\n')}
+
+Pinterest Interest: ${this.results.pinterest_interest || 0}/100 (relative popularity index)
+
+Key Insight: ${this.results.distribution_summary.non_google_search_share}% of search volume is outside Google
 
 Generated by Total Search`;
                     navigator.clipboard.writeText(summary).then(() => {
