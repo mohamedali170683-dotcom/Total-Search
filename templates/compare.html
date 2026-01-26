@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Competitor Comparison - Total Search</title>
+    <title>Competitor Comparison - Total Demand</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
@@ -20,7 +20,7 @@
                 <div class="flex items-center space-x-3">
                     <i class="fas fa-balance-scale text-2xl text-purple-500"></i>
                     <div>
-                        <h1 class="text-xl font-bold">Total Search</h1>
+                        <h1 class="text-xl font-bold">Total Demand</h1>
                         <span class="text-xs text-gray-400">Competitor Comparison</span>
                     </div>
                 </div>
@@ -47,7 +47,7 @@
                 Compare Share of Voice
             </h2>
             <p class="text-gray-400 text-sm mb-6">
-                Compare your brand's search demand against competitors across all platforms.
+                Compare your brand's demand against competitors across all 6 platforms.
             </p>
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -138,14 +138,14 @@
                 <!-- Total volumes -->
                 <div class="grid grid-cols-2 gap-8 mt-8">
                     <div class="text-center p-4 bg-blue-500/10 rounded-lg border border-blue-500/30">
-                        <p class="text-sm text-blue-400 mb-1">Your Brand Search Volume</p>
-                        <p class="text-3xl font-bold" x-text="formatNumber(results?.brand?.search_volume_total || results?.brand?.total_demand || 0)"></p>
-                        <p class="text-xs text-gray-400 mt-1">monthly searches (Google + YouTube + Amazon)</p>
+                        <p class="text-sm text-blue-400 mb-1">Your Brand Total Demand</p>
+                        <p class="text-3xl font-bold" x-text="formatNumber(results?.brand?.total_demand || 0)"></p>
+                        <p class="text-xs text-gray-400 mt-1">cross-platform demand (all 6 platforms)</p>
                     </div>
                     <div class="text-center p-4 bg-red-500/10 rounded-lg border border-red-500/30">
-                        <p class="text-sm text-red-400 mb-1">Competitor Search Volume</p>
-                        <p class="text-3xl font-bold" x-text="formatNumber(results?.competitor?.search_volume_total || results?.competitor?.total_demand || 0)"></p>
-                        <p class="text-xs text-gray-400 mt-1">monthly searches (Google + YouTube + Amazon)</p>
+                        <p class="text-sm text-red-400 mb-1">Competitor Total Demand</p>
+                        <p class="text-3xl font-bold" x-text="formatNumber(results?.competitor?.total_demand || 0)"></p>
+                        <p class="text-xs text-gray-400 mt-1">cross-platform demand (all 6 platforms)</p>
                     </div>
                 </div>
 
@@ -380,13 +380,13 @@
                         'Competitive Share of Voice Report',
                         '================================',
                         '',
-                        'Overall Share of Voice (search platforms):',
+                        'Overall Share of Voice:',
                         `  Your Brand: ${this.results.share_of_voice.overall.brand}%`,
                         `  Competitor: ${this.results.share_of_voice.overall.competitor}%`,
                         '',
-                        'Search Volume (Google + YouTube + Amazon):',
-                        `  Your Brand: ${this.formatNumber(this.results.brand.search_volume_total || this.results.brand.total_demand)}`,
-                        `  Competitor: ${this.formatNumber(this.results.competitor.search_volume_total || this.results.competitor.total_demand)}`,
+                        'Total Demand (all 6 platforms):',
+                        `  Your Brand: ${this.formatNumber(this.results.brand.total_demand)}`,
+                        `  Competitor: ${this.formatNumber(this.results.competitor.total_demand)}`,
                         '',
                         'By Platform:',
                     ];
@@ -422,13 +422,13 @@
                         'Competitive Share of Voice Report',
                         '================================',
                         '',
-                        'Overall Share of Voice (search platforms):',
+                        'Overall Share of Voice:',
                         `  Your Brand: ${this.results.share_of_voice.overall.brand}%`,
                         `  Competitor: ${this.results.share_of_voice.overall.competitor}%`,
                         '',
-                        'Search Volume (Google + YouTube + Amazon):',
-                        `  Your Brand: ${this.formatNumber(this.results.brand.search_volume_total || this.results.brand.total_demand)}`,
-                        `  Competitor: ${this.formatNumber(this.results.competitor.search_volume_total || this.results.competitor.total_demand)}`,
+                        'Total Demand (all 6 platforms):',
+                        `  Your Brand: ${this.formatNumber(this.results.brand.total_demand)}`,
+                        `  Competitor: ${this.formatNumber(this.results.competitor.total_demand)}`,
                         '',
                         'By Platform:',
                     ];
@@ -439,7 +439,7 @@
                     }
 
                     lines.push('');
-                    lines.push('Generated by Total Search - Cross-Platform Demand Intelligence');
+                    lines.push('Generated by Total Demand - Cross-Platform Demand Intelligence');
 
                     navigator.clipboard.writeText(lines.join('\n')).then(() => {
                         alert('Summary copied to clipboard!');

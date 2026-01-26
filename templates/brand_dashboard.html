@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Brand Intelligence - Total Search</title>
+    <title>Brand Intelligence - Total Demand</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://unpkg.com/alpinejs@3.x.x/dist/cdn.min.js" defer></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
@@ -27,7 +27,7 @@
             <div class="flex items-center justify-between">
                 <div class="flex items-center space-x-3">
                     <i class="fas fa-search-dollar text-2xl text-blue-500"></i>
-                    <h1 class="text-xl font-bold">Total Search</h1>
+                    <h1 class="text-xl font-bold">Total Demand</h1>
                     <span class="text-xs bg-purple-600 px-2 py-1 rounded">Brand</span>
                 </div>
                 <div class="flex items-center space-x-4">
@@ -432,7 +432,7 @@
     <!-- Footer -->
     <footer class="bg-gray-800 border-t border-gray-700 mt-12">
         <div class="max-w-7xl mx-auto px-4 py-6 text-center text-gray-500 text-sm">
-            <p>Brand Intelligence by Total Search</p>
+            <p>Brand Intelligence by Total Demand</p>
         </div>
     </footer>
 
@@ -655,7 +655,7 @@
                     this.isLoading = true;
                     this.refreshStatus = 'Researching across all 5 platforms...';
                     try {
-                        // Research across ALL platforms - this is the core value of Total Search!
+                        // Research across ALL platforms - this is the core value of Total Demand!
                         const response = await fetch(`/api/brands/${this.selectedBrand.id}/refresh`, {
                             method: 'POST'
                         });
