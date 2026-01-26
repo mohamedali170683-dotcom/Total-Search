@@ -146,6 +146,22 @@
                             <option value="ja">Japanese</option>
                         </select>
                     </div>
+
+                    <!-- Audience Profile Selector -->
+                    <div class="w-full lg:w-56">
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Audience Profile</label>
+                        <select
+                            x-model="selectedProfile"
+                            class="select-modern w-full px-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 transition pr-10"
+                        >
+                            <option value="general">General (default)</option>
+                            <option value="ecommerce">E-commerce</option>
+                            <option value="beauty">Beauty &amp; Lifestyle</option>
+                            <option value="gen_z">Gen Z Audience</option>
+                            <option value="b2b_tech">B2B / Technology</option>
+                            <option value="video_content">Video &amp; Content</option>
+                        </select>
+                    </div>
                 </div>
 
                 <!-- Search Button -->
@@ -532,20 +548,49 @@
                     <!-- FAQ 5 -->
                     <div class="border border-slate-200 rounded-lg overflow-hidden">
                         <button @click="openFaq = openFaq === 5 ? null : 5" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">What do the platform weights mean?</span>
+                            <span class="font-medium text-slate-800">What do the Audience Profiles and platform weights mean?</span>
                             <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 5 }"></i>
                         </button>
                         <div x-show="openFaq === 5" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>The Demand Index uses a weighted average to reflect each platform's relative importance in measuring overall demand:</p>
-                            <ul class="mt-2 ml-4 space-y-1">
-                                <li><strong>Google (25%)</strong> &mdash; The largest search engine; strongest signal of active demand</li>
-                                <li><strong>YouTube (18%)</strong> &mdash; Second-largest search engine; video content demand</li>
-                                <li><strong>Amazon (18%)</strong> &mdash; Purchase-intent searches; commercial demand</li>
-                                <li><strong>TikTok (13%)</strong> &mdash; Social engagement signals; emerging audience interest</li>
-                                <li><strong>Instagram (13%)</strong> &mdash; Visual content engagement; brand awareness</li>
-                                <li><strong>Pinterest (13%)</strong> &mdash; Discovery and planning intent; aspirational demand</li>
-                            </ul>
-                            <p class="mt-2">These weights are calibrated for general brand analysis. The composite score only includes platforms with data &mdash; if a platform returns zero, its weight is redistributed.</p>
+                            <p>The Demand Index is a weighted average of normalized platform scores. Different audiences use platforms differently, so the weights change based on the selected Audience Profile. Each profile is calibrated using industry research data:</p>
+
+                            <div class="mt-3 space-y-3">
+                                <div class="bg-slate-50 rounded-lg p-3">
+                                    <p class="font-semibold text-slate-700">General (default)</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">Google 30% &middot; Amazon 22% &middot; YouTube 15% &middot; Instagram 14% &middot; TikTok 11% &middot; Pinterest 8%</p>
+                                    <p class="text-xs text-slate-400 mt-1">Average adult, cross-industry. Based on NP Digital 2025 daily search volume data &amp; Jungle Scout product search studies.</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-lg p-3">
+                                    <p class="font-semibold text-slate-700">E-commerce</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">Amazon 32% &middot; Google 25% &middot; Pinterest 14% &middot; Instagram 12% &middot; YouTube 10% &middot; TikTok 7%</p>
+                                    <p class="text-xs text-slate-400 mt-1">Purchase-focused brands. Amazon: 56-74% of product searches start here (Jungle Scout 2025). Pinterest: 96% of searches are unbranded.</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-lg p-3">
+                                    <p class="font-semibold text-slate-700">Beauty &amp; Lifestyle</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">TikTok 25% &middot; Instagram 22% &middot; Google 18% &middot; Amazon 15% &middot; Pinterest 12% &middot; YouTube 8%</p>
+                                    <p class="text-xs text-slate-400 mt-1">Beauty, fashion, food, home. 80% of TikTok Shop US sales are beauty (McKinsey 2025). 70% of shoppers discover next purchase on Instagram.</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-lg p-3">
+                                    <p class="font-semibold text-slate-700">Gen Z Audience</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">TikTok 26% &middot; Instagram 22% &middot; YouTube 18% &middot; Google 18% &middot; Pinterest 8% &middot; Amazon 8%</p>
+                                    <p class="text-xs text-slate-400 mt-1">Ages 16-27. 64% of Gen Z use TikTok as a search engine (Adobe 2024). Google usage down 25% vs Gen X (Claneo State of Search 2025).</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-lg p-3">
+                                    <p class="font-semibold text-slate-700">B2B / Technology</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">Google 40% &middot; YouTube 22% &middot; Amazon 18% &middot; Instagram 8% &middot; TikTok 7% &middot; Pinterest 5%</p>
+                                    <p class="text-xs text-slate-400 mt-1">Tech, SaaS, professional services. Google dominates informational/professional search. YouTube critical for reviews and tutorials.</p>
+                                </div>
+                                <div class="bg-slate-50 rounded-lg p-3">
+                                    <p class="font-semibold text-slate-700">Video &amp; Content</p>
+                                    <p class="text-xs text-slate-500 mt-0.5">YouTube 30% &middot; TikTok 25% &middot; Instagram 18% &middot; Google 15% &middot; Pinterest 7% &middot; Amazon 5%</p>
+                                    <p class="text-xs text-slate-400 mt-1">Entertainment, education, creators. YouTube is the 2nd largest search engine. TikTok is the fastest-growing content discovery platform.</p>
+                                </div>
+                            </div>
+
+                            <p class="mt-3 text-xs text-slate-400">
+                                <strong>Data sources:</strong> NP Digital Web Summit 2025, Jungle Scout Consumer Trends 2025, Claneo State of Search 2025, SparkToro/Datos Q2 2025, McKinsey State of Beauty 2025, Adobe Gen Z Search Study 2024. Weights are re-calibrated periodically as platform usage evolves.
+                            </p>
+                            <p class="mt-2">If a platform returns zero data, its weight is redistributed among the remaining platforms.</p>
                         </div>
                     </div>
                 </div>
@@ -721,6 +766,7 @@
                 searchQuery: '',
                 selectedCountry: 'us',
                 selectedLanguage: 'en',
+                selectedProfile: 'general',
                 forceRefresh: false,
                 isLoading: false,
                 results: null,
@@ -779,6 +825,7 @@
                             keywords: this.searchQuery,
                             country: this.selectedCountry,
                             language: this.selectedLanguage,
+                            weight_preset: this.selectedProfile,
                             refresh: this.forceRefresh ? 'true' : 'false'
                         });
 
@@ -866,8 +913,9 @@
 
                 exportCSV() {
                     if (!this.results) return;
+                    const profileLabel = this.results.weight_preset_label || 'General';
                     const headers = ['Keyword', 'Google (searches)', 'YouTube (searches)', 'Amazon (searches)', 'TikTok (avg interactions)', 'Instagram (avg interactions)', 'Pinterest (interest 0-100)', 'Best Platform'];
-                    const rows = [headers.join(',')];
+                    const rows = [`# Audience Profile: ${profileLabel}`, headers.join(',')];
                     for (const [keyword, data] of Object.entries(this.results.keyword_details || {})) {
                         const row = [
                             `"${keyword}"`,
@@ -894,8 +942,10 @@
                     if (!this.results) return;
                     const platforms = (this.results.platforms || []).filter(p => p.volume > 0);
 
+                    const profileLabel = this.results.weight_preset_label || 'General';
                     const summary = `Total Demand Analysis (${this.getCountryName()})
 ============================
+Audience Profile: ${profileLabel}
 
 Demand Index: ${this.results.demand_index}/100 (cross-platform composite score)
 

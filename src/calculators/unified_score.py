@@ -27,12 +27,12 @@ class UnifiedScoreCalculator:
     """
 
     DEFAULT_WEIGHTS = {
-        Platform.GOOGLE: 0.25,
-        Platform.YOUTUBE: 0.18,
-        Platform.AMAZON: 0.18,
-        Platform.TIKTOK: 0.13,
-        Platform.INSTAGRAM: 0.13,
-        Platform.PINTEREST: 0.13,
+        Platform.GOOGLE: 0.30,
+        Platform.AMAZON: 0.22,
+        Platform.YOUTUBE: 0.15,
+        Platform.INSTAGRAM: 0.14,
+        Platform.TIKTOK: 0.11,
+        Platform.PINTEREST: 0.08,
     }
 
     # Normalization parameters (calibrated for typical search volumes)
@@ -234,89 +234,99 @@ class UnifiedScoreCalculator:
 
 
 class WeightPresets:
-    """Predefined weight configurations for different use cases."""
+    """
+    Research-backed weight configurations for different audience profiles.
 
-    # Balanced weights for general analysis
-    BALANCED = {
-        Platform.GOOGLE: 0.22,
-        Platform.YOUTUBE: 0.17,
-        Platform.AMAZON: 0.17,
-        Platform.TIKTOK: 0.15,
+    Data sources:
+    - NP Digital Web Summit 2025: daily search volumes across platforms
+    - Jungle Scout Consumer Trends 2025: where consumers start product searches
+    - Claneo State of Search 2025: platform usage by age group
+    - SparkToro/Datos Q2 2025: search market share
+    - McKinsey State of Beauty 2025: TikTok Shop category data
+    - Adobe Gen Z Search Study 2024: Gen Z search behavior
+    """
+
+    # General: average adult, cross-industry
+    GENERAL = {
+        Platform.GOOGLE: 0.30,
+        Platform.AMAZON: 0.22,
+        Platform.YOUTUBE: 0.15,
         Platform.INSTAGRAM: 0.14,
-        Platform.PINTEREST: 0.15,
+        Platform.TIKTOK: 0.11,
+        Platform.PINTEREST: 0.08,
     }
 
-    # E-commerce focused (Amazon + Pinterest weighted higher)
+    # E-commerce: purchase-focused brands
     ECOMMERCE = {
-        Platform.GOOGLE: 0.15,
+        Platform.AMAZON: 0.32,
+        Platform.GOOGLE: 0.25,
+        Platform.PINTEREST: 0.14,
+        Platform.INSTAGRAM: 0.12,
+        Platform.YOUTUBE: 0.10,
+        Platform.TIKTOK: 0.07,
+    }
+
+    # Beauty & Lifestyle: beauty, fashion, food, home
+    BEAUTY = {
+        Platform.TIKTOK: 0.25,
+        Platform.INSTAGRAM: 0.22,
+        Platform.GOOGLE: 0.18,
+        Platform.AMAZON: 0.15,
+        Platform.PINTEREST: 0.12,
         Platform.YOUTUBE: 0.08,
-        Platform.AMAZON: 0.40,
-        Platform.TIKTOK: 0.10,
-        Platform.INSTAGRAM: 0.07,
-        Platform.PINTEREST: 0.20,
     }
 
-    # Content/Influencer focused (social platforms weighted higher)
-    CONTENT = {
-        Platform.GOOGLE: 0.12,
-        Platform.YOUTUBE: 0.20,
-        Platform.AMAZON: 0.08,
-        Platform.TIKTOK: 0.25,
-        Platform.INSTAGRAM: 0.20,
-        Platform.PINTEREST: 0.15,
-    }
-
-    # SEO focused (Google weighted higher)
-    SEO = {
-        Platform.GOOGLE: 0.45,
+    # Gen Z Audience: ages 16-27
+    GEN_Z = {
+        Platform.TIKTOK: 0.26,
+        Platform.INSTAGRAM: 0.22,
         Platform.YOUTUBE: 0.18,
-        Platform.AMAZON: 0.10,
-        Platform.TIKTOK: 0.10,
-        Platform.INSTAGRAM: 0.07,
-        Platform.PINTEREST: 0.10,
-    }
-
-    # Video content focused
-    VIDEO = {
-        Platform.GOOGLE: 0.12,
-        Platform.YOUTUBE: 0.40,
+        Platform.GOOGLE: 0.18,
+        Platform.PINTEREST: 0.08,
         Platform.AMAZON: 0.08,
-        Platform.TIKTOK: 0.25,
-        Platform.INSTAGRAM: 0.05,
-        Platform.PINTEREST: 0.10,
     }
 
-    # Lifestyle/Visual (Pinterest + Instagram heavy - beauty, fashion, home, food)
-    LIFESTYLE = {
+    # B2B / Technology: tech, SaaS, professional services
+    B2B_TECH = {
+        Platform.GOOGLE: 0.40,
+        Platform.YOUTUBE: 0.22,
+        Platform.AMAZON: 0.18,
+        Platform.INSTAGRAM: 0.08,
+        Platform.TIKTOK: 0.07,
+        Platform.PINTEREST: 0.05,
+    }
+
+    # Video & Content: entertainment, education, creators
+    VIDEO_CONTENT = {
+        Platform.YOUTUBE: 0.30,
+        Platform.TIKTOK: 0.25,
+        Platform.INSTAGRAM: 0.18,
         Platform.GOOGLE: 0.15,
-        Platform.YOUTUBE: 0.12,
-        Platform.AMAZON: 0.13,
-        Platform.TIKTOK: 0.15,
-        Platform.INSTAGRAM: 0.20,
-        Platform.PINTEREST: 0.25,
+        Platform.PINTEREST: 0.07,
+        Platform.AMAZON: 0.05,
     }
 
     @classmethod
     def get_preset(cls, name: str) -> dict[Platform, float]:
         """Get a weight preset by name."""
         presets = {
-            "balanced": cls.BALANCED,
+            "general": cls.GENERAL,
             "ecommerce": cls.ECOMMERCE,
-            "content": cls.CONTENT,
-            "seo": cls.SEO,
-            "video": cls.VIDEO,
-            "lifestyle": cls.LIFESTYLE,
+            "beauty": cls.BEAUTY,
+            "gen_z": cls.GEN_Z,
+            "b2b_tech": cls.B2B_TECH,
+            "video_content": cls.VIDEO_CONTENT,
         }
-        return presets.get(name.lower(), cls.BALANCED)
+        return presets.get(name.lower(), cls.GENERAL)
 
     @classmethod
     def list_presets(cls) -> dict[str, str]:
         """List available presets with descriptions."""
         return {
-            "balanced": "General analysis across all platforms",
-            "ecommerce": "Amazon + Pinterest weighted for shopping intent",
-            "content": "Social platforms weighted for content creators",
-            "seo": "Google weighted for organic search focus",
-            "video": "YouTube + TikTok weighted for video content",
-            "lifestyle": "Pinterest + Instagram for visual/lifestyle brands",
+            "general": "Average adult, cross-industry (NP Digital 2025, Jungle Scout 2025)",
+            "ecommerce": "Purchase-focused brands (Amazon 56-74% product search start)",
+            "beauty": "Beauty, fashion, food, home (80% TikTok Shop sales = beauty)",
+            "gen_z": "Ages 16-27 (64% use TikTok as search engine)",
+            "b2b_tech": "Tech, SaaS, professional services (Google-dominant)",
+            "video_content": "Entertainment, education, creators (YouTube + TikTok)",
         }

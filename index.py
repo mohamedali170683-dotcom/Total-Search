@@ -1163,6 +1163,7 @@ async def analyze_demand_distribution(
     refresh: bool = Query(default=False, description="Force refresh data from APIs"),
     country: str = Query(default="us", description="Country code (e.g., us, de, uk, fr)"),
     language: str = Query(default="en", description="Language code (e.g., en, de, fr, es)"),
+    weight_preset: str = Query(default="general", description="Audience profile for platform weights"),
 ):
     """
     Analyze demand distribution across all platforms for given keywords.
@@ -1221,12 +1222,18 @@ async def analyze_demand_distribution(
             fetched_data = await _fetch_demand_data(keywords_to_fetch, country=country, language=language)
             results.update(fetched_data)
 
+        # Validate weight preset
+        if weight_preset not in WEIGHT_PRESETS:
+            weight_preset = "general"
+
         # Calculate demand distribution
-        distribution = _calculate_demand_distribution(results)
+        distribution = _calculate_demand_distribution(results, weight_preset=weight_preset)
 
         return {
             "keywords": keyword_list,
             "demand_index": distribution["demand_index"],
+            "weight_preset": weight_preset,
+            "weight_preset_label": WEIGHT_PRESET_LABELS.get(weight_preset, "General"),
             "total_demand": distribution["total_volume"],  # backward compat
             "search_volume_total": distribution["search_volume_total"],
             "social_engagement_total": distribution["social_engagement_total"],
@@ -1436,13 +1443,44 @@ def _normalize_to_100(volume: int) -> float:
     return max(0.0, min(100.0, ((log_vol - log_min) / (log_max - log_min)) * 100))
 
 
-PLATFORM_WEIGHTS = {
-    "google": 0.25, "youtube": 0.18, "amazon": 0.18,
-    "tiktok": 0.13, "instagram": 0.13, "pinterest": 0.13,
+WEIGHT_PRESETS = {
+    "general": {
+        "google": 0.30, "amazon": 0.22, "youtube": 0.15,
+        "instagram": 0.14, "tiktok": 0.11, "pinterest": 0.08,
+    },
+    "ecommerce": {
+        "amazon": 0.32, "google": 0.25, "pinterest": 0.14,
+        "instagram": 0.12, "youtube": 0.10, "tiktok": 0.07,
+    },
+    "beauty": {
+        "tiktok": 0.25, "instagram": 0.22, "google": 0.18,
+        "amazon": 0.15, "pinterest": 0.12, "youtube": 0.08,
+    },
+    "gen_z": {
+        "tiktok": 0.26, "instagram": 0.22, "youtube": 0.18,
+        "google": 0.18, "pinterest": 0.08, "amazon": 0.08,
+    },
+    "b2b_tech": {
+        "google": 0.40, "youtube": 0.22, "amazon": 0.18,
+        "instagram": 0.08, "tiktok": 0.07, "pinterest": 0.05,
+    },
+    "video_content": {
+        "youtube": 0.30, "tiktok": 0.25, "instagram": 0.18,
+        "google": 0.15, "pinterest": 0.07, "amazon": 0.05,
+    },
+}
+
+WEIGHT_PRESET_LABELS = {
+    "general": "General",
+    "ecommerce": "E-commerce",
+    "beauty": "Beauty & Lifestyle",
+    "gen_z": "Gen Z Audience",
+    "b2b_tech": "B2B / Technology",
+    "video_content": "Video & Content",
 }
 
 
-def _calculate_demand_distribution(keyword_data: dict) -> dict:
+def _calculate_demand_distribution(keyword_data: dict, weight_preset: str = "general") -> dict:
     """Calculate unified demand distribution across all platforms."""
     SEARCH_PLATFORMS = {"google", "youtube", "amazon"}
     SOCIAL_PLATFORMS = {"tiktok", "instagram"}
@@ -1500,11 +1538,12 @@ def _calculate_demand_distribution(keyword_data: dict) -> dict:
             normalized_scores[p] = round(_normalize_to_100(vol), 1)
 
     # Compute Demand Index (weighted average of normalized scores)
+    weights = WEIGHT_PRESETS.get(weight_preset, WEIGHT_PRESETS["general"])
     weighted_sum = 0.0
     total_weight = 0.0
     for p, score in normalized_scores.items():
         if score > 0:
-            w = PLATFORM_WEIGHTS.get(p, 0)
+            w = weights.get(p, 0)
             weighted_sum += score * w
             total_weight += w
     demand_index = int(weighted_sum / total_weight) if total_weight > 0 else 0
