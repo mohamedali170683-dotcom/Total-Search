@@ -1,19 +1,21 @@
 """
-Engagement score calculators for TikTok and Instagram metrics.
+Audience interest calculators for TikTok and Instagram metrics.
 
-IMPORTANT: These calculators produce ENGAGEMENT metrics, NOT search volume estimates.
+IMPORTANT: These calculators produce AUDIENCE INTEREST metrics, NOT search volume estimates.
 
 What we measure:
-- TikTok: Hashtag views, video counts, content engagement
-- Instagram: Post counts, posting frequency, community engagement
+- TikTok: Average likes per video — how many unique users interact with content
+- Instagram: Average likes per post — how many unique users interact with content
 
-What we DO NOT measure:
+Why avg_likes:
+- 1 like ≈ 1 unique person interested in this topic
+- Average per post/video is sample-size-independent (stable whether we scrape 20 or 50 posts)
+- We take max(avg_likes, avg_comments) to avoid double-counting (same person can like AND comment)
+- Likes are almost always the higher number (10-50x more than comments)
+
+What this does NOT measure:
 - How many people search for these terms on TikTok/Instagram
 - Direct user intent or demand (like Google search volume)
-
-The resulting scores represent "audience engagement" - how much content exists
-and how much interaction that content receives. This is valuable data but
-fundamentally different from search volume.
 """
 
 import logging
@@ -32,46 +34,32 @@ logger = logging.getLogger(__name__)
 
 class TikTokEngagementCalculator:
     """
-    Calculates TikTok ENGAGEMENT metrics from hashtag data.
+    Calculates TikTok audience interest from hashtag data.
 
-    IMPORTANT: This produces ENGAGEMENT scores, NOT search volume estimates.
+    Metric: avg_likes per video (the higher of avg_likes vs avg_comments).
 
-    What we measure:
-    - hashtag_views: Total views on content with this hashtag (algorithm-driven exposure)
-    - video_count: Number of videos using hashtag (creator activity/supply)
-    - avg_likes, avg_comments, avg_shares: Audience interaction rates
+    Why avg_likes:
+    - 1 like ≈ 1 unique person interested in this topic
+    - Sample-size-independent (stable whether we scrape 20 or 50 videos)
+    - We use max(avg_likes, avg_comments) to pick the stronger signal
+      without double-counting (same person can like AND comment)
 
     What this tells you:
-    - "X million users have engaged with content about this topic on TikTok"
-    - How much content exists (supply side)
-    - How audiences interact with this content
+    - "On average, X people interact with each video about this topic"
+    - Higher = more audience interest per piece of content
 
     What this does NOT tell you:
-    - How many people actively search for this term on TikTok
-    - Direct user intent or demand
-
-    The TikTok algorithm pushes content to users; users don't primarily search.
-    High engagement ≠ high search demand. They are different metrics.
+    - How many people search for this term on TikTok
+    - Total reach (that depends on video count, which is supply-side)
     """
-
-    # Scaling factors for engagement score calculation
-    # These normalize the score to a reasonable range, NOT to match search volume
-    VIEWS_WEIGHT = 0.001  # 1M views = 1000 engagement points
-    VIDEO_COUNT_WEIGHT = 10  # Each video = 10 engagement points
-
-    # Bounds
-    MIN_ENGAGEMENT_SCORE = 0
-    MAX_ENGAGEMENT_SCORE = 100_000_000  # Allow large engagement numbers
 
     def calculate(self, raw_data: dict[str, Any]) -> TikTokMetrics:
         """
-        Calculate TikTok ENGAGEMENT metrics from raw scraped data.
+        Calculate TikTok audience interest from raw scraped data.
 
-        Args:
-            raw_data: Raw data from Apify TikTok scraper
-
-        Returns:
-            TikTokMetrics with engagement_score (NOT search volume)
+        The engagement_score = max(avg_likes, avg_comments) per video.
+        This represents the average number of unique users interacting
+        with content about this topic.
         """
         stats = raw_data.get("stats", {})
         videos = raw_data.get("videos", [])
@@ -86,17 +74,11 @@ class TikTokEngagementCalculator:
         trend_velocity = self._calculate_posting_trend(videos)
         trend = self._determine_trend(trend_velocity)
 
-        # Calculate engagement score (NOT search volume)
-        engagement_score = self._calculate_engagement_score(
-            hashtag_views=hashtag_views,
-            video_count=video_count,
-            avg_likes=avg_likes,
-            avg_comments=avg_comments,
-            avg_shares=avg_shares,
-        )
+        # Primary metric: max(avg_likes, avg_comments) per video
+        # This avoids double-counting (same person can like AND comment)
+        engagement_score = int(max(avg_likes, avg_comments))
 
         return TikTokMetrics(
-            # Use engagement_score, not proxy_score
             engagement_score=engagement_score,
             metric_type=MetricType.ENGAGEMENT,
             trend=trend,
@@ -110,50 +92,11 @@ class TikTokEngagementCalculator:
             avg_shares=avg_shares,
             raw_data=raw_data,
             metric_explanation=(
-                f"TikTok audience engagement: {hashtag_views:,} views across "
-                f"{video_count:,} videos. This shows content exposure, NOT search demand."
+                f"TikTok avg. interactions per video: {int(max(avg_likes, avg_comments)):,} "
+                f"(from {video_count:,} sampled videos). "
+                f"Each interaction ≈ 1 interested person."
             ),
         )
-
-    def _calculate_engagement_score(
-        self,
-        hashtag_views: int,
-        video_count: int,
-        avg_likes: float,
-        avg_comments: float,
-        avg_shares: float,
-    ) -> int:
-        """
-        Calculate engagement score from TikTok metrics.
-
-        This is an ENGAGEMENT metric showing audience interaction,
-        NOT a search volume estimate.
-
-        Components:
-        - Views: Primary exposure metric (algorithm-driven)
-        - Video count: Content supply
-        - Avg engagement: Audience interaction quality
-        """
-        # Views component (scaled down for reasonable numbers)
-        views_component = hashtag_views * self.VIEWS_WEIGHT
-
-        # Video count component
-        video_component = video_count * self.VIDEO_COUNT_WEIGHT
-
-        # Engagement quality multiplier (based on avg interactions)
-        avg_engagement = avg_likes + avg_comments + (avg_shares * 2)  # Shares weighted higher
-        engagement_multiplier = 1.0 + min(avg_engagement / 10000, 1.0)  # Max 2x multiplier
-
-        # Combined engagement score
-        engagement_score = (views_component + video_component) * engagement_multiplier
-
-        # Apply bounds
-        final_score = max(
-            self.MIN_ENGAGEMENT_SCORE,
-            min(self.MAX_ENGAGEMENT_SCORE, engagement_score)
-        )
-
-        return int(final_score)
 
     def _calculate_posting_trend(self, videos: list[dict]) -> float:
         """
@@ -230,46 +173,32 @@ class TikTokEngagementCalculator:
 
 class InstagramEngagementCalculator:
     """
-    Calculates Instagram ENGAGEMENT metrics from hashtag data.
+    Calculates Instagram audience interest from hashtag data.
 
-    IMPORTANT: This produces ENGAGEMENT scores, NOT search volume estimates.
+    Metric: avg_likes per post (the higher of avg_likes vs avg_comments).
 
-    What we measure:
-    - post_count: Total posts using hashtag (content supply)
-    - daily_posts: Posts per day (creator activity)
-    - avg_likes, avg_comments: Audience interaction rates
+    Why avg_likes:
+    - 1 like ≈ 1 unique person interested in this topic
+    - Sample-size-independent (stable whether we scrape 20 or 50 posts)
+    - We use max(avg_likes, avg_comments) to pick the stronger signal
+      without double-counting (same person can like AND comment)
 
     What this tells you:
-    - "X posts exist with this hashtag, receiving Y average engagement"
-    - Community activity around this topic
-    - Creator interest in this topic
+    - "On average, X people interact with each post about this topic"
+    - Higher = more audience interest per piece of content
 
     What this does NOT tell you:
-    - How many people actively search for this term on Instagram
-    - Direct user intent or demand
-
-    Instagram's Explore is algorithm-driven; users browse more than search.
-    High post counts ≠ high search demand. They are different metrics.
+    - How many people search for this term on Instagram
+    - Total reach (that depends on post count, which is supply-side)
     """
-
-    # Scaling factors for engagement score calculation
-    # These normalize the score to a reasonable range
-    POST_COUNT_WEIGHT = 0.1  # 10K posts = 1000 engagement points
-    DAILY_POSTS_WEIGHT = 100  # 10 daily posts = 1000 engagement points
-
-    # Bounds
-    MIN_ENGAGEMENT_SCORE = 0
-    MAX_ENGAGEMENT_SCORE = 100_000_000
 
     def calculate(self, raw_data: dict[str, Any]) -> "InstagramMetrics":
         """
-        Calculate Instagram ENGAGEMENT metrics from raw scraped data.
+        Calculate Instagram audience interest from raw scraped data.
 
-        Args:
-            raw_data: Raw data from Apify Instagram scraper
-
-        Returns:
-            InstagramMetrics with engagement_score (NOT search volume)
+        The engagement_score = max(avg_likes, avg_comments) per post.
+        This represents the average number of unique users interacting
+        with content about this topic.
         """
         stats = raw_data.get("stats", {})
         posts = raw_data.get("posts", [])
@@ -284,16 +213,11 @@ class InstagramEngagementCalculator:
         trend_velocity = self._calculate_posting_trend(posts)
         trend = self._determine_trend(trend_velocity)
 
-        # Calculate engagement score (NOT search volume)
-        engagement_score = self._calculate_engagement_score(
-            post_count=post_count,
-            daily_posts=daily_posts,
-            avg_likes=avg_likes,
-            avg_comments=avg_comments,
-        )
+        # Primary metric: max(avg_likes, avg_comments) per post
+        # This avoids double-counting (same person can like AND comment)
+        engagement_score = int(max(avg_likes, avg_comments))
 
         return InstagramMetrics(
-            # Use engagement_score, not proxy_score
             engagement_score=engagement_score,
             metric_type=MetricType.ENGAGEMENT,
             trend=trend,
@@ -308,49 +232,11 @@ class InstagramEngagementCalculator:
             related_hashtags=related_hashtags,
             raw_data=raw_data,
             metric_explanation=(
-                f"Instagram community engagement: {post_count:,} posts, "
-                f"~{daily_posts:,} posts/day. This shows creator activity, NOT search demand."
+                f"Instagram avg. interactions per post: {int(max(avg_likes, avg_comments)):,} "
+                f"(from {post_count:,} sampled posts). "
+                f"Each interaction ≈ 1 interested person."
             ),
         )
-
-    def _calculate_engagement_score(
-        self,
-        post_count: int,
-        daily_posts: int,
-        avg_likes: float,
-        avg_comments: float,
-    ) -> int:
-        """
-        Calculate engagement score from Instagram metrics.
-
-        This is an ENGAGEMENT metric showing community activity,
-        NOT a search volume estimate.
-
-        Components:
-        - Post count: Content supply/creator activity
-        - Daily posts: Current activity level
-        - Avg engagement: Audience interaction quality
-        """
-        # Post count component (historical content supply)
-        post_component = post_count * self.POST_COUNT_WEIGHT
-
-        # Daily posts component (current activity)
-        daily_component = daily_posts * self.DAILY_POSTS_WEIGHT
-
-        # Engagement quality multiplier
-        avg_engagement = avg_likes + avg_comments
-        engagement_multiplier = 1.0 + min(avg_engagement / 5000, 1.0)  # Max 2x multiplier
-
-        # Combined engagement score
-        engagement_score = (post_component + daily_component) * engagement_multiplier
-
-        # Apply bounds
-        final_score = max(
-            self.MIN_ENGAGEMENT_SCORE,
-            min(self.MAX_ENGAGEMENT_SCORE, engagement_score)
-        )
-
-        return int(final_score)
 
     def _calculate_daily_posts(self, posts: list[dict]) -> int:
         """

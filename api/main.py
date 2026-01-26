@@ -1498,7 +1498,7 @@ def _calculate_demand_distribution(keyword_data: dict) -> dict:
     }
     METRIC_LABEL_MAP = {
         "search_volume": "Monthly Searches",
-        "engagement": "Engagement Score",
+        "engagement": "Avg. Interactions / Post",
         "interest_index": "Interest Index (0-100)",
     }
 
@@ -1507,6 +1507,8 @@ def _calculate_demand_distribution(keyword_data: dict) -> dict:
         "tiktok": 0, "instagram": 0, "pinterest": 0,
     }
     platform_trends = {p: [] for p in platform_totals}
+    # Track per-keyword values for social platforms (to compute averages, not sums)
+    platform_keyword_values: dict[str, list[int]] = {p: [] for p in SOCIAL_PLATFORMS}
 
     # Aggregate volumes across all keywords
     for kw, data in keyword_data.items():
@@ -1514,10 +1516,27 @@ def _calculate_demand_distribution(keyword_data: dict) -> dict:
         for platform, metrics in platforms.items():
             if platform in platform_totals:
                 volume = metrics.get("volume", 0) if isinstance(metrics, dict) else 0
-                platform_totals[platform] += volume
+                if platform in SEARCH_PLATFORMS:
+                    # Search platforms: SUM across keywords (monthly searches add up)
+                    platform_totals[platform] += volume
+                elif platform in SOCIAL_PLATFORMS:
+                    # Social platforms: collect per-keyword avg_likes to average later
+                    platform_keyword_values[platform].append(volume)
+                else:
+                    # Pinterest: keep max interest score (it's a 0-100 index)
+                    platform_totals[platform] = max(platform_totals[platform], volume)
                 trend = metrics.get("trend") if isinstance(metrics, dict) else None
                 if trend:
                     platform_trends[platform].append(trend)
+
+    # For social platforms, compute average across keywords (not sum)
+    # avg_likes for "nescafé" + avg_likes for "nescafé gold" → average of the two
+    for p in SOCIAL_PLATFORMS:
+        values = platform_keyword_values[p]
+        if values:
+            platform_totals[p] = int(sum(values) / len(values))
+        else:
+            platform_totals[p] = 0
 
     # Compute honest totals by metric type
     search_volume_total = sum(platform_totals[p] for p in SEARCH_PLATFORMS)
@@ -1664,7 +1683,7 @@ def _generate_demand_insights(platforms: list, summary: dict) -> list[dict]:
             if metric_type == "search_volume":
                 desc = f"Search volume on {p['display_name']} is trending upward. This platform may warrant increased investment."
             elif metric_type == "engagement":
-                desc = f"Audience engagement on {p['display_name']} is growing. More content is being created around this topic."
+                desc = f"Audience interest on {p['display_name']} is growing. More users are interacting with content about this topic."
             else:
                 desc = f"Interest on {p['display_name']} is trending upward."
             insights.append({
@@ -1688,13 +1707,24 @@ def _generate_demand_insights(platforms: list, summary: dict) -> list[dict]:
                 "platform": "amazon",
             })
 
-    # Insight: Social engagement signals (NOT "demand" or "search volume")
-    if social_total > 0:
+    # Insight: Social audience interest signals
+    tiktok_data = next((p for p in platforms if p["platform"] == "tiktok"), None)
+    instagram_data = next((p for p in platforms if p["platform"] == "instagram"), None)
+    if tiktok_data and tiktok_data["volume"] > 0:
         insights.append({
             "type": "social",
-            "title": "Active social engagement detected",
-            "description": f"TikTok and Instagram show a combined engagement score of {social_total:,}. This reflects content creation and audience interaction, not search queries. Consider content strategies for these platforms.",
+            "title": f"TikTok: ~{tiktok_data['volume']:,} people interact per video",
+            "description": f"On average, {tiktok_data['volume']:,} unique users like or comment on each TikTok video about this topic. This shows audience interest, not search volume.",
             "priority": "medium",
+            "platform": "tiktok",
+        })
+    if instagram_data and instagram_data["volume"] > 0:
+        insights.append({
+            "type": "social",
+            "title": f"Instagram: ~{instagram_data['volume']:,} people interact per post",
+            "description": f"On average, {instagram_data['volume']:,} unique users like or comment on each Instagram post about this topic. This shows audience interest, not search volume.",
+            "priority": "medium",
+            "platform": "instagram",
         })
 
     # Insight: Pinterest interest

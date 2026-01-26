@@ -186,10 +186,10 @@
                     <p class="text-[10px] text-slate-300 mt-0.5">Google + YouTube + Amazon</p>
                 </div>
                 <div class="card card-hover p-5">
-                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Social Engagement</p>
+                    <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Audience Interest</p>
                     <p class="text-2xl font-bold text-amber-600 mt-1" x-text="formatNumber(results?.social_engagement_total || 0)"></p>
-                    <p class="text-xs text-slate-400 mt-1">engagement score</p>
-                    <p class="text-[10px] text-slate-300 mt-0.5">TikTok + Instagram</p>
+                    <p class="text-xs text-slate-400 mt-1">avg. interactions / post</p>
+                    <p class="text-[10px] text-slate-300 mt-0.5">TikTok + Instagram avg.</p>
                 </div>
                 <div class="card card-hover p-5">
                     <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Pinterest Interest</p>
@@ -273,7 +273,8 @@
 
                             <!-- Social & Discovery Signals -->
                             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-                                <i class="fas fa-hashtag mr-1"></i> Social & Discovery Signals
+                                <i class="fas fa-heart mr-1"></i> Audience Interest
+                                <span class="text-slate-300 font-normal normal-case ml-1">(avg. interactions per post)</span>
                             </p>
                             <div class="space-y-3">
                                 <template x-for="platform in getSocialPlatforms()" :key="platform.platform">
@@ -289,9 +290,9 @@
                                                         x-show="platform.metric_type === 'engagement'"
                                                         class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium"
                                                         :title="platform.platform === 'tiktok'
-                                                            ? 'Calculated from hashtag views, video count & posting velocity'
-                                                            : 'Calculated from hashtag posts, posting frequency & media interactions'"
-                                                    >engagement</span>
+                                                            ? 'Average likes per video — each like ≈ 1 interested person'
+                                                            : 'Average likes per post — each like ≈ 1 interested person'"
+                                                    >avg. interactions</span>
                                                     <span
                                                         x-show="platform.metric_type === 'interest_index'"
                                                         class="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium"
@@ -300,7 +301,7 @@
                                                 </div>
                                                 <div class="flex items-center space-x-2">
                                                     <span class="text-slate-900 font-semibold" x-text="formatNumber(platform.volume)"></span>
-                                                    <span class="text-slate-400 text-xs" x-text="platform.metric_label"></span>
+                                                    <span class="text-slate-400 text-xs" x-text="platform.metric_type === 'engagement' ? 'per post' : platform.metric_label"></span>
                                                 </div>
                                             </div>
                                             <div class="h-1.5 bg-slate-100 rounded-full overflow-hidden">
@@ -336,16 +337,16 @@
                         </p>
                     </div>
 
-                    <!-- Social signals summary -->
+                    <!-- Audience interest summary -->
                     <div class="mt-3 bg-white/40 rounded-xl p-3 space-y-2">
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Social Signals</p>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Audience Interest</p>
                         <div class="flex items-center justify-between text-sm" x-show="getSocialPlatformByName('tiktok')?.volume > 0">
                             <span class="text-slate-600"><i class="fab fa-tiktok mr-1 text-slate-700"></i> TikTok</span>
-                            <span class="font-semibold text-slate-800" x-text="formatNumber(getSocialPlatformByName('tiktok')?.volume || 0) + ' engagement'"></span>
+                            <span class="font-semibold text-slate-800" x-text="'~' + formatNumber(getSocialPlatformByName('tiktok')?.volume || 0) + ' / video'"></span>
                         </div>
                         <div class="flex items-center justify-between text-sm" x-show="getSocialPlatformByName('instagram')?.volume > 0">
                             <span class="text-slate-600"><i class="fab fa-instagram mr-1 text-pink-500"></i> Instagram</span>
-                            <span class="font-semibold text-slate-800" x-text="formatNumber(getSocialPlatformByName('instagram')?.volume || 0) + ' engagement'"></span>
+                            <span class="font-semibold text-slate-800" x-text="'~' + formatNumber(getSocialPlatformByName('instagram')?.volume || 0) + ' / post'"></span>
                         </div>
                         <div class="flex items-center justify-between text-sm" x-show="(results?.pinterest_interest || 0) > 0">
                             <span class="text-slate-600"><i class="fab fa-pinterest mr-1 text-red-600"></i> Pinterest</span>
@@ -468,13 +469,13 @@
                                 <th class="pb-3 px-3 text-right font-semibold text-blue-600 bg-blue-50/50" title="Sum of Google + YouTube + Amazon search volumes">
                                     <i class="fas fa-search text-blue-400 mr-1"></i>Search Total
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500 border-l-2 border-slate-200" title="Engagement Score: Calculated from hashtag views, video count, and posting frequency. NOT search volume.">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500 border-l-2 border-slate-200" title="Avg. interactions per video — each like ≈ 1 interested person. NOT search volume.">
                                     <i class="fab fa-tiktok text-slate-700 mr-1"></i>TikTok
-                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1" title="Engagement metric"></span>
+                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1" title="Avg. interactions"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Score: Calculated from hashtag post count, recent posting frequency, and media interactions. NOT search volume.">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Avg. interactions per post — each like ≈ 1 interested person. NOT search volume.">
                                     <i class="fab fa-instagram text-pink-500 mr-1"></i>Instagram
-                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1" title="Engagement metric"></span>
+                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1" title="Avg. interactions"></span>
                                 </th>
                                 <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Interest Index (0-100): Relative popularity score from Pinterest Trends. NOT search volume.">
                                     <i class="fab fa-pinterest text-red-600 mr-1"></i>Pinterest
@@ -531,14 +532,14 @@
                         <div class="flex items-start space-x-2">
                             <span class="w-2 h-2 bg-amber-500 rounded-full mt-1 flex-shrink-0"></span>
                             <div class="text-slate-600">
-                                <strong>Engagement Score</strong> (TikTok, Instagram):
+                                <strong>Audience Interest</strong> (TikTok, Instagram):
                                 <strong class="text-amber-700">This is NOT search volume.</strong>
-                                This number represents audience engagement calculated from:
+                                This number shows the <strong>average interactions per post/video</strong> about this topic:
                                 <ul class="mt-1 ml-4 list-disc space-y-0.5 text-slate-500">
-                                    <li><strong>TikTok:</strong> Total hashtag views, video count, and posting velocity (how many new videos are posted daily)</li>
-                                    <li><strong>Instagram:</strong> Total hashtag posts, recent posting frequency, and average media interactions (likes + comments)</li>
+                                    <li><strong>TikTok:</strong> Average likes per video (each like &asymp; 1 interested person)</li>
+                                    <li><strong>Instagram:</strong> Average likes per post (each like &asymp; 1 interested person)</li>
                                 </ul>
-                                <span class="text-slate-400 mt-1 inline-block">Higher = more audience activity around this topic. Use to gauge content potential, not search demand.</span>
+                                <span class="text-slate-400 mt-1 inline-block">We use the higher of avg. likes vs avg. comments to avoid double-counting (same person can like AND comment). Higher = more people interested in this topic on that platform.</span>
                             </div>
                         </div>
                         <div class="flex items-start space-x-2">
@@ -873,7 +874,7 @@
 
                 exportCSV() {
                     if (!this.results) return;
-                    const headers = ['Keyword', 'Google (searches)', 'YouTube (searches)', 'Amazon (searches)', 'Search Total', 'TikTok (engagement)', 'Instagram (engagement)', 'Pinterest (interest 0-100)', 'Best Platform'];
+                    const headers = ['Keyword', 'Google (searches)', 'YouTube (searches)', 'Amazon (searches)', 'Search Total', 'TikTok (avg interactions/video)', 'Instagram (avg interactions/post)', 'Pinterest (interest 0-100)', 'Best Platform'];
                     const rows = [headers.join(',')];
                     for (const [keyword, data] of Object.entries(this.results.keyword_details || {})) {
                         const g = data.platforms?.google?.volume || 0;
@@ -911,8 +912,8 @@
 Search Volume: ${this.formatNumber(this.results.search_volume_total)} monthly searches (Google + YouTube + Amazon)
 ${searchPlatforms.map(p => `  - ${p.display_name}: ${this.formatNumber(p.volume)} (${p.percentage}%)`).join('\n')}
 
-Social Engagement: ${this.formatNumber(this.results.social_engagement_total)} engagement score (TikTok + Instagram)
-${socialPlatforms.map(p => `  - ${p.display_name}: ${this.formatNumber(p.volume)} engagement`).join('\n')}
+Audience Interest (avg. interactions per post):
+${socialPlatforms.map(p => `  - ${p.display_name}: ~${this.formatNumber(p.volume)} per ${p.platform === 'tiktok' ? 'video' : 'post'} (each ≈ 1 interested person)`).join('\n')}
 
 Pinterest Interest: ${this.results.pinterest_interest || 0}/100 (relative popularity index)
 
