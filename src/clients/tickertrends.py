@@ -29,7 +29,7 @@ class TickerTrendsClient(BaseAPIClient):
             if settings.tickertrends_api_key
             else ""
         )
-        self._endpoint_path = settings.tickertrends_endpoint or "/search-volume"
+        self._endpoint_path = settings.tickertrends_endpoint or "/api/public/search-volume"
 
         super().__init__(
             base_url=self.BASE_URL,

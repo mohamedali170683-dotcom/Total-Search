@@ -30,7 +30,7 @@ class Settings(BaseSettings):
 
     # TickerTrends API (optional — for TikTok trend correlation)
     tickertrends_api_key: SecretStr = Field(default="", description="TickerTrends API key")
-    tickertrends_endpoint: str = Field(default="/search-volume", description="TickerTrends API endpoint path")
+    tickertrends_endpoint: str = Field(default="/api/public/search-volume", description="TickerTrends API endpoint path")
 
     # Database
     database_url: str = Field(
