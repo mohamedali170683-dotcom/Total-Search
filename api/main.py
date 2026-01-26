@@ -1969,18 +1969,28 @@ async def get_trends_intelligence(
 
                 # Fetch TikTok trends if configured
                 tiktok_data = {}
+                tiktok_debug = {}
                 try:
                     tt_client = TickerTrendsClient(settings=settings)
+                    tiktok_debug["is_configured"] = tt_client.is_configured
+                    tiktok_debug["hashtag"] = keyword_list[0].replace(" ", "") if keyword_list else ""
                     if tt_client.is_configured and keyword_list:
                         tiktok_data = await tt_client.get_hashtag_trends(
                             hashtag=keyword_list[0].replace(" ", ""),
                         )
+                        tiktok_debug["response_status"] = tiktok_data.get("status")
+                        tiktok_debug["data_points"] = len(tiktok_data.get("interest_over_time", []))
+                        if tiktok_data.get("error"):
+                            tiktok_debug["error"] = tiktok_data["error"]
                         if tiktok_data.get("status") == "ok":
                             multi_platform.setdefault("platforms", {})["tiktok"] = {
                                 "interest_over_time": tiktok_data.get("interest_over_time", []),
                             }
+                    else:
+                        tiktok_debug["skipped"] = "not configured or no keywords"
                 except Exception as e:
                     logger.warning(f"TikTok trends failed: {e}")
+                    tiktok_debug["exception"] = str(e)
 
                 # Compute correlation
                 if multi_platform.get("platforms"):
@@ -2007,6 +2017,7 @@ async def get_trends_intelligence(
         if include_correlation:
             response["multi_platform_trends"] = multi_platform.get("platforms", {})
             response["correlation_analysis"] = correlation_analysis
+            response["tiktok_debug"] = tiktok_debug
 
         return response
 
