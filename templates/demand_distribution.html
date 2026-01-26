@@ -240,7 +240,21 @@
                                     </div>
                                     <div class="flex-1 ml-3">
                                         <div class="flex justify-between text-sm mb-1">
-                                            <span class="font-medium text-slate-700" x-text="platform.display_name"></span>
+                                            <div class="flex items-center space-x-2">
+                                                <span class="font-medium text-slate-700" x-text="platform.display_name"></span>
+                                                <span
+                                                    x-show="platform.platform === 'tiktok' || platform.platform === 'instagram'"
+                                                    class="text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded-full font-medium"
+                                                    :title="platform.platform === 'tiktok'
+                                                        ? 'Calculated from hashtag views, video count & posting velocity'
+                                                        : 'Calculated from hashtag posts, posting frequency & media interactions'"
+                                                >engagement</span>
+                                                <span
+                                                    x-show="platform.platform === 'pinterest'"
+                                                    class="text-[10px] bg-purple-100 text-purple-700 px-1.5 py-0.5 rounded-full font-medium"
+                                                    title="Relative popularity score (0-100) from Pinterest Trends"
+                                                >interest index</span>
+                                            </div>
                                             <div class="flex items-center space-x-2">
                                                 <span class="text-slate-900 font-semibold" x-text="formatNumber(platform.volume)"></span>
                                                 <span class="text-slate-400 text-xs" x-text="'(' + platform.percentage + '%)'"></span>
@@ -393,17 +407,17 @@
                                     <i class="fab fa-amazon text-orange-500 mr-1"></i>Amazon
                                     <span class="w-1.5 h-1.5 bg-green-500 rounded-full inline-block ml-1"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Estimate">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Score: Calculated from hashtag views, video count, and posting frequency. NOT search volume.">
                                     <i class="fab fa-tiktok text-slate-700 mr-1"></i>TikTok
-                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1"></span>
+                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1" title="Engagement metric"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Estimate">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Engagement Score: Calculated from hashtag post count, recent posting frequency, and media interactions. NOT search volume.">
                                     <i class="fab fa-instagram text-pink-500 mr-1"></i>Instagram
-                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1"></span>
+                                    <span class="w-1.5 h-1.5 bg-amber-500 rounded-full inline-block ml-1" title="Engagement metric"></span>
                                 </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Interest Index (0-100)">
+                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Interest Index (0-100): Relative popularity score from Pinterest Trends. NOT search volume.">
                                     <i class="fab fa-pinterest text-red-600 mr-1"></i>Pinterest
-                                    <span class="w-1.5 h-1.5 bg-purple-500 rounded-full inline-block ml-1"></span>
+                                    <span class="w-1.5 h-1.5 bg-purple-500 rounded-full inline-block ml-1" title="Interest index"></span>
                                 </th>
                                 <th class="pb-3 pl-3 text-center font-semibold text-slate-500">Best</th>
                             </tr>
@@ -440,22 +454,37 @@
 
                 <!-- Data Source Transparency Notice -->
                 <div class="mt-4 p-4 bg-slate-50 border border-slate-200 rounded-lg">
-                    <p class="text-xs text-slate-600 mb-2">
+                    <p class="text-xs text-slate-600 mb-3">
                         <i class="fas fa-info-circle mr-1"></i>
-                        <strong>Data Source Transparency:</strong>
+                        <strong>Data Source Transparency &mdash; What do these numbers mean?</strong>
                     </p>
-                    <div class="flex flex-wrap gap-4 text-xs">
-                        <div class="flex items-center space-x-2">
-                            <span class="w-2 h-2 bg-green-500 rounded-full"></span>
-                            <span class="text-slate-600"><strong>Search Volume:</strong> Google, YouTube, Amazon (verified monthly searches)</span>
+                    <div class="space-y-2 text-xs">
+                        <div class="flex items-start space-x-2">
+                            <span class="w-2 h-2 bg-green-500 rounded-full mt-1 flex-shrink-0"></span>
+                            <span class="text-slate-600">
+                                <strong>Search Volume</strong> (Google, YouTube, Amazon):
+                                Actual monthly search queries. Source: DataForSEO API and Google Trends.
+                            </span>
                         </div>
-                        <div class="flex items-center space-x-2">
-                            <span class="w-2 h-2 bg-amber-500 rounded-full"></span>
-                            <span class="text-slate-600"><strong>Engagement:</strong> TikTok, Instagram (audience interaction, NOT search volume)</span>
+                        <div class="flex items-start space-x-2">
+                            <span class="w-2 h-2 bg-amber-500 rounded-full mt-1 flex-shrink-0"></span>
+                            <div class="text-slate-600">
+                                <strong>Engagement Score</strong> (TikTok, Instagram):
+                                <strong class="text-amber-700">This is NOT search volume.</strong>
+                                This number represents audience engagement calculated from:
+                                <ul class="mt-1 ml-4 list-disc space-y-0.5 text-slate-500">
+                                    <li><strong>TikTok:</strong> Total hashtag views, video count, and posting velocity (how many new videos are posted daily)</li>
+                                    <li><strong>Instagram:</strong> Total hashtag posts, recent posting frequency, and average media interactions (likes + comments)</li>
+                                </ul>
+                                <span class="text-slate-400 mt-1 inline-block">Higher = more audience activity around this topic. Use to gauge content potential, not search demand.</span>
+                            </div>
                         </div>
-                        <div class="flex items-center space-x-2">
-                            <span class="w-2 h-2 bg-purple-500 rounded-full"></span>
-                            <span class="text-slate-600"><strong>Interest Index:</strong> Pinterest (relative 0-100 popularity score)</span>
+                        <div class="flex items-start space-x-2">
+                            <span class="w-2 h-2 bg-purple-500 rounded-full mt-1 flex-shrink-0"></span>
+                            <span class="text-slate-600">
+                                <strong>Interest Index</strong> (Pinterest):
+                                Relative popularity score (0-100) from Pinterest Trends. 100 = peak interest. NOT an absolute count.
+                            </span>
                         </div>
                     </div>
                 </div>
@@ -693,7 +722,11 @@
 
                         if (response.ok) {
                             this.results = data;
-                            this.$nextTick(() => this.renderChart());
+                            // Double nextTick + requestAnimationFrame to ensure x-show has
+                            // made the canvas visible before Chart.js measures dimensions
+                            this.$nextTick(() => {
+                                requestAnimationFrame(() => this.renderChart());
+                            });
                         } else {
                             alert('Error: ' + (data.detail || 'Analysis failed'));
                         }
