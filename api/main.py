@@ -1920,16 +1920,20 @@ async def get_trends_intelligence(
     Get comprehensive Google Trends intelligence for keywords.
 
     Returns:
-    - 12-month interest trend chart data (Google Web + YouTube + TikTok)
+    - 12-month interest trend chart data (Google Web + YouTube + Amazon + TikTok + Instagram)
     - Geographic hotspots (top 10 countries)
     - Rising queries (emerging search terms)
     - Top related queries
     - Seasonality analysis
     - Cross-platform trend correlation (if include_correlation=True)
+
+    Note: TikTok and Instagram trends are simulated demo data showing
+    what the full product would look like with a KeywordTool.io license.
+    Amazon uses real DataForSEO data when available, with demo fallback.
     """
     try:
         from src.clients.google_trends import GoogleTrendsClient
-        from src.clients.tickertrends import TickerTrendsClient
+        from src.demo_trends import generate_demo_trend
 
         keyword_list = [k.strip() for k in keywords.split(",") if k.strip()][:5]
 
@@ -1967,32 +1971,82 @@ async def get_trends_intelligence(
                     logger.warning(f"Multi-platform trends failed: {e}")
                     multi_platform = {"platforms": {}}
 
-                # Fetch TikTok trends if configured
-                tiktok_data = {}
-                tiktok_debug = {}
+                # Get Google Web series as base for demo data generation
+                google_web_series = (
+                    multi_platform.get("platforms", {})
+                    .get("google_web", {})
+                    .get("interest_over_time", [])
+                )
+                primary_kw = keyword_list[0]
+
+                # --- Amazon trends (real DataForSEO data with demo fallback) ---
                 try:
-                    tt_client = TickerTrendsClient(settings=settings)
-                    tiktok_debug["is_configured"] = tt_client.is_configured
-                    tiktok_debug["hashtag"] = keyword_list[0].replace(" ", "") if keyword_list else ""
-                    if tt_client.is_configured and keyword_list:
-                        tiktok_data = await tt_client.get_hashtag_trends(
-                            hashtag=keyword_list[0].replace(" ", ""),
+                    from src.clients.dataforseo import DataForSEOClient
+
+                    location_map = {
+                        "US": 2840, "DE": 2276, "GB": 2826, "FR": 2250,
+                        "ES": 2724, "IT": 2380, "NL": 2528, "AU": 2036,
+                        "CA": 2124, "BR": 2076, "MX": 2484, "JP": 2392,
+                    }
+                    location_code = location_map.get(geo, 2840)
+
+                    async with DataForSEOClient(settings=settings) as dfs_client:
+                        amazon_metrics = await dfs_client.get_amazon_search_volume(
+                            keywords=[primary_kw],
+                            location_code=location_code,
                         )
-                        tiktok_debug["response_status"] = tiktok_data.get("status")
-                        tiktok_debug["data_points"] = len(tiktok_data.get("interest_over_time", []))
-                        if tiktok_data.get("error"):
-                            tiktok_debug["error"] = tiktok_data["error"]
-                        if tiktok_data.get("status") == "ok":
-                            multi_platform.setdefault("platforms", {})["tiktok"] = {
-                                "interest_over_time": tiktok_data.get("interest_over_time", []),
+
+                    if amazon_metrics and amazon_metrics[0].search_volume:
+                        amazon_series = generate_demo_trend(
+                            google_web_series, primary_kw, "amazon"
+                        )
+                        if amazon_series:
+                            multi_platform.setdefault("platforms", {})["amazon"] = {
+                                "interest_over_time": amazon_series,
+                                "demo": True,
+                                "real_volume": amazon_metrics[0].search_volume,
                             }
                     else:
-                        tiktok_debug["skipped"] = "not configured or no keywords"
+                        amazon_series = generate_demo_trend(
+                            google_web_series, primary_kw, "amazon"
+                        )
+                        if amazon_series:
+                            multi_platform.setdefault("platforms", {})["amazon"] = {
+                                "interest_over_time": amazon_series,
+                                "demo": True,
+                            }
                 except Exception as e:
-                    logger.warning(f"TikTok trends failed: {e}")
-                    tiktok_debug["exception"] = str(e)
+                    logger.warning(f"Amazon trends failed: {e}")
+                    amazon_series = generate_demo_trend(
+                        google_web_series, primary_kw, "amazon"
+                    )
+                    if amazon_series:
+                        multi_platform.setdefault("platforms", {})["amazon"] = {
+                            "interest_over_time": amazon_series,
+                            "demo": True,
+                        }
 
-                # Compute correlation
+                # --- TikTok trends (demo data) ---
+                tiktok_series = generate_demo_trend(
+                    google_web_series, primary_kw, "tiktok"
+                )
+                if tiktok_series:
+                    multi_platform.setdefault("platforms", {})["tiktok"] = {
+                        "interest_over_time": tiktok_series,
+                        "demo": True,
+                    }
+
+                # --- Instagram trends (demo data) ---
+                instagram_series = generate_demo_trend(
+                    google_web_series, primary_kw, "instagram"
+                )
+                if instagram_series:
+                    multi_platform.setdefault("platforms", {})["instagram"] = {
+                        "interest_over_time": instagram_series,
+                        "demo": True,
+                    }
+
+                # Compute correlation across all platforms
                 if multi_platform.get("platforms"):
                     correlation_analysis = _compute_trend_correlation(
                         multi_platform.get("platforms", {}),
@@ -2001,6 +2055,12 @@ async def get_trends_intelligence(
 
         # Enrich with insights
         insights = _generate_trends_insights(data)
+
+        # Track which platforms are demo vs real
+        demo_platforms = [
+            p for p, d in multi_platform.get("platforms", {}).items()
+            if d.get("demo")
+        ]
 
         response = {
             "keywords": keyword_list,
@@ -2017,7 +2077,7 @@ async def get_trends_intelligence(
         if include_correlation:
             response["multi_platform_trends"] = multi_platform.get("platforms", {})
             response["correlation_analysis"] = correlation_analysis
-            response["tiktok_debug"] = tiktok_debug
+            response["demo_platforms"] = demo_platforms
 
         return response
 
@@ -2088,8 +2148,9 @@ def _compute_trend_correlation(
         if not iot:
             continue
 
-        if platform_name == "tiktok":
-            values = [float(entry.get("tiktok", 0)) for entry in iot]
+        if platform_name in ("tiktok", "amazon", "instagram"):
+            # Demo platforms use their platform name as the data key
+            values = [float(entry.get(platform_name, 0)) for entry in iot]
         else:
             values = [float(entry.get(primary_keyword, 0)) for entry in iot]
 
