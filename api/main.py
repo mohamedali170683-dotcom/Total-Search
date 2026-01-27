@@ -2120,6 +2120,95 @@ async def get_trends_intelligence(
         )
 
 
+# ---------------------------------------------------------------------------
+# Behavioral Search Intelligence
+# ---------------------------------------------------------------------------
+
+@app.get("/api/behavioral/analysis")
+async def analyze_behavioral_intelligence(
+    keyword: str = Query(..., description="Category keyword to analyze (e.g., naturkosmetik)"),
+    brands: str = Query(default="", description="Comma-separated brand names for share of search"),
+    country: str = Query(default="de", description="Country code (e.g., de, us, uk)"),
+    language: str = Query(default="de", description="Language code (e.g., de, en)"),
+):
+    """
+    Behavioral search intelligence: funnel mapping, share of search, modifier analysis.
+
+    Analyzes search data to extract actionable behavioral insights:
+    1. Funnel Stage Mapping — where is category demand? (awareness/consideration/purchase)
+    2. Share of Search — brand share of total category search (predicts market share)
+    3. Behavioral Modifiers — macro consumer behavior patterns (price vs quality, etc.)
+    """
+    import traceback
+
+    try:
+        from src.clients.dataforseo import DataForSEOClient
+        from src.behavioral_analysis import (
+            get_all_behavioral_keywords,
+            analyze_funnel,
+            analyze_share_of_search,
+            analyze_modifier_pairs,
+        )
+
+        brand_list = [b.strip() for b in brands.split(",") if b.strip()]
+
+        # Get all keywords needed in a single list
+        all_keywords = get_all_behavioral_keywords(keyword, brand_list, language)
+
+        # Country → location code mapping
+        country_location_map = {
+            "us": 2840, "de": 2276, "uk": 2826, "gb": 2826,
+            "fr": 2250, "es": 2724, "it": 2380, "nl": 2528,
+            "au": 2036, "ca": 2124,
+        }
+        location_code = country_location_map.get(country.lower(), 2840)
+
+        # Language → DataForSEO language code
+        lang_map = {"de": "de", "en": "en", "fr": "fr", "es": "es", "it": "it", "nl": "nl"}
+        lang_code = lang_map.get(language.lower(), "en")
+
+        # Fetch all volumes in one DataForSEO call
+        keyword_volumes: dict[str, int] = {}
+        async with DataForSEOClient(settings=settings) as client:
+            metrics = await client.get_google_search_volume(
+                all_keywords,
+                location_code=location_code,
+                language_code=lang_code,
+            )
+            for m in metrics:
+                if hasattr(m, "keyword") and hasattr(m, "search_volume"):
+                    keyword_volumes[m.keyword] = m.search_volume or 0
+
+        # Run all three analyses
+        funnel = analyze_funnel(keyword, keyword_volumes, language)
+
+        share_of_search = None
+        if brand_list:
+            brand_vols = {b: keyword_volumes.get(b, 0) for b in brand_list}
+            cat_generic_vol = keyword_volumes.get(keyword, 0)
+            share_of_search = analyze_share_of_search(keyword, brand_vols, cat_generic_vol)
+
+        modifiers = analyze_modifier_pairs(keyword_volumes, language)
+
+        return {
+            "status": "ok",
+            "keyword": keyword,
+            "country": country,
+            "language": language,
+            "keywords_analyzed": len(keyword_volumes),
+            "funnel_analysis": funnel.to_dict(),
+            "share_of_search": share_of_search.to_dict() if share_of_search else None,
+            "behavioral_modifiers": modifiers.to_dict(),
+        }
+
+    except Exception as e:
+        logger.error(f"Behavioral analysis failed: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Behavioral analysis failed: {str(e)}\n{traceback.format_exc()}"
+        )
+
+
 @app.get("/api/trends/daily")
 async def get_daily_trending_searches(
     country: str = Query(default="united_states", description="Country (e.g., united_states, germany, japan)"),

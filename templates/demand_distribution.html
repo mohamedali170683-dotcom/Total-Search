@@ -805,6 +805,160 @@
                 </div>
             </div>
 
+            <!-- Behavioral Intelligence Section -->
+            <div class="card p-6 mt-6" x-show="hasResults">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-semibold text-slate-900">
+                        <i class="fas fa-brain text-violet-500 mr-2"></i>Behavioral Search Intelligence
+                    </h3>
+                    <button
+                        @click="loadBehavioralAnalysis()"
+                        :disabled="behavioralLoading"
+                        class="px-3 py-1.5 text-xs font-medium rounded-lg bg-violet-600 text-white hover:bg-violet-700 disabled:opacity-50 transition-all">
+                        <i :class="behavioralLoading ? 'fas fa-circle-notch fa-spin' : 'fas fa-microscope'" class="mr-1"></i>
+                        <span x-text="behavioralLoading ? 'Analyzing...' : (behavioralData ? 'Refresh' : 'Analyze Behavior')"></span>
+                    </button>
+                </div>
+
+                <!-- Loading State -->
+                <div x-show="behavioralLoading" class="text-center py-8">
+                    <i class="fas fa-circle-notch fa-spin text-3xl text-violet-400 mb-3"></i>
+                    <p class="text-sm text-slate-500">Analyzing funnel stages, behavioral modifiers, and market patterns...</p>
+                </div>
+
+                <!-- Results -->
+                <div x-show="behavioralData && !behavioralLoading">
+
+                    <!-- Funnel Stage Mapping -->
+                    <div x-show="behavioralData?.funnel_analysis" class="mb-6">
+                        <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                            <i class="fas fa-filter text-blue-500 mr-1"></i>
+                            Category Funnel Profile
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                            <div class="h-48">
+                                <canvas id="funnelChart"></canvas>
+                            </div>
+                            <div>
+                                <div class="space-y-2 mb-3">
+                                    <template x-for="stage in (behavioralData?.funnel_analysis?.stages || [])" :key="stage.stage">
+                                        <div class="flex items-center justify-between p-2 rounded-lg"
+                                            :class="{
+                                                'bg-blue-50': stage.stage === 'awareness',
+                                                'bg-amber-50': stage.stage === 'consideration',
+                                                'bg-emerald-50': stage.stage === 'purchase'
+                                            }">
+                                            <div class="flex items-center gap-2">
+                                                <div class="w-2.5 h-2.5 rounded-full"
+                                                    :class="{
+                                                        'bg-blue-500': stage.stage === 'awareness',
+                                                        'bg-amber-500': stage.stage === 'consideration',
+                                                        'bg-emerald-500': stage.stage === 'purchase'
+                                                    }"></div>
+                                                <span class="text-xs font-medium text-slate-700 capitalize" x-text="stage.stage"></span>
+                                            </div>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs font-bold" x-text="stage.percentage + '%'"></span>
+                                                <span class="text-[10px] text-slate-400" x-text="stage.volume.toLocaleString() + ' vol'"></span>
+                                            </div>
+                                        </div>
+                                    </template>
+                                </div>
+                                <div class="p-3 bg-violet-50 rounded-lg border border-violet-200">
+                                    <p class="text-xs text-violet-800" x-text="behavioralData?.funnel_analysis?.insight"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Share of Search -->
+                    <div x-show="behavioralData?.share_of_search" class="mb-6">
+                        <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                            <i class="fas fa-chart-pie text-green-500 mr-1"></i>
+                            Share of Search
+                            <span class="text-[10px] font-normal text-slate-400 ml-1">(Les Binet method — predicts market share)</span>
+                        </h4>
+                        <div class="space-y-2">
+                            <template x-for="brand in (behavioralData?.share_of_search?.brands || [])" :key="brand.brand">
+                                <div class="relative overflow-hidden rounded-lg bg-slate-50 p-3">
+                                    <div class="absolute inset-y-0 left-0 bg-gradient-to-r from-green-100 to-green-50 rounded-lg"
+                                        :style="'width:' + Math.min(brand.share_percentage, 100) + '%'"></div>
+                                    <div class="relative flex items-center justify-between">
+                                        <span class="text-sm font-medium text-slate-800 capitalize" x-text="brand.brand"></span>
+                                        <div class="flex items-center gap-3">
+                                            <span class="text-xs text-slate-500" x-text="brand.volume.toLocaleString() + '/mo'"></span>
+                                            <span class="text-sm font-bold text-slate-900" x-text="brand.share_percentage.toFixed(1) + '%'"></span>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                        <div class="mt-2 flex justify-between text-xs text-slate-500">
+                            <span x-text="'Unbranded: ' + (behavioralData?.share_of_search?.unbranded_percentage || 0).toFixed(1) + '%'"></span>
+                            <span x-text="'Total category: ' + (behavioralData?.share_of_search?.total_category_volume || 0).toLocaleString() + '/mo'"></span>
+                        </div>
+                        <div x-show="behavioralData?.share_of_search?.insight" class="mt-2 p-3 bg-green-50 rounded-lg border border-green-200">
+                            <p class="text-xs text-green-800" x-text="behavioralData?.share_of_search?.insight"></p>
+                        </div>
+                    </div>
+
+                    <!-- Behavioral Modifiers -->
+                    <div x-show="behavioralData?.behavioral_modifiers?.pairs?.length">
+                        <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                            <i class="fas fa-arrows-alt-h text-orange-500 mr-1"></i>
+                            Market Behavior Signals
+                        </h4>
+                        <div class="space-y-3">
+                            <template x-for="pair in (behavioralData?.behavioral_modifiers?.pairs || [])" :key="pair.modifier_a + pair.modifier_b">
+                                <div class="p-3 bg-slate-50 rounded-lg">
+                                    <div class="flex items-center justify-between mb-2">
+                                        <span class="text-xs font-medium text-slate-600" x-text="pair.label"></span>
+                                        <span class="text-xs px-2 py-0.5 rounded-full font-medium"
+                                            :class="{
+                                                'bg-blue-100 text-blue-700': pair.ratio > 2,
+                                                'bg-amber-100 text-amber-700': pair.ratio >= 0.5 && pair.ratio <= 2,
+                                                'bg-red-100 text-red-700': pair.ratio < 0.5
+                                            }"
+                                            x-text="pair.ratio.toFixed(1) + 'x'"></span>
+                                    </div>
+                                    <div class="flex items-center gap-2 mb-2">
+                                        <div class="flex-1">
+                                            <div class="flex justify-between text-[10px] text-slate-500 mb-1">
+                                                <span x-text="'\"' + pair.modifier_a + '\"'"></span>
+                                                <span x-text="pair.volume_a.toLocaleString()"></span>
+                                            </div>
+                                            <div class="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                                <div class="h-full bg-red-400 rounded-full"
+                                                    :style="'width:' + Math.min(pair.volume_a / Math.max(pair.volume_a, pair.volume_b) * 100, 100) + '%'"></div>
+                                            </div>
+                                        </div>
+                                        <span class="text-[10px] text-slate-400 font-medium">vs</span>
+                                        <div class="flex-1">
+                                            <div class="flex justify-between text-[10px] text-slate-500 mb-1">
+                                                <span x-text="'\"' + pair.modifier_b + '\"'"></span>
+                                                <span x-text="pair.volume_b.toLocaleString()"></span>
+                                            </div>
+                                            <div class="h-1.5 bg-slate-200 rounded-full overflow-hidden">
+                                                <div class="h-full bg-blue-400 rounded-full"
+                                                    :style="'width:' + Math.min(pair.volume_b / Math.max(pair.volume_a, pair.volume_b) * 100, 100) + '%'"></div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    <p class="text-[11px] text-slate-600" x-text="pair.insight"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                </div>
+
+                <!-- Empty state for behavioral -->
+                <div x-show="!behavioralData && !behavioralLoading" class="text-center py-6">
+                    <i class="fas fa-brain text-3xl text-slate-300 mb-2"></i>
+                    <p class="text-sm text-slate-400">Click "Analyze Behavior" to discover funnel insights, share of search, and behavioral patterns.</p>
+                </div>
+            </div>
+
         </div>
 
         <!-- Empty State -->
@@ -851,6 +1005,8 @@
                 trendsData: null,
                 trendsLoading: false,
                 trendsChart: null,
+                behavioralData: null,
+                behavioralLoading: false,
 
                 get hasResults() {
                     return this.results && this.results.total_demand > 0;
@@ -1087,6 +1243,77 @@ Generated by Total Search — Cross-Platform Search Intelligence`;
                     } finally {
                         this.trendsLoading = false;
                     }
+                },
+
+                async loadBehavioralAnalysis(brands = '') {
+                    if (!this.searchQuery.trim()) return;
+                    this.behavioralLoading = true;
+
+                    try {
+                        const keyword = this.searchQuery.split(',')[0].trim();
+                        const params = new URLSearchParams({
+                            keyword,
+                            country: this.selectedCountry,
+                            language: this.selectedLanguage,
+                        });
+                        if (brands) params.set('brands', brands);
+
+                        const response = await fetch(`/api/behavioral/analysis?${params}`);
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.behavioralData = data;
+                            this.$nextTick(() => this.renderFunnelChart());
+                        } else {
+                            console.error('Behavioral analysis error:', data);
+                        }
+                    } catch (error) {
+                        console.error('Behavioral fetch error:', error);
+                    } finally {
+                        this.behavioralLoading = false;
+                    }
+                },
+
+                renderFunnelChart() {
+                    const ctx = document.getElementById('funnelChart');
+                    if (!ctx || !this.behavioralData?.funnel_analysis) return;
+
+                    if (this._funnelChart) this._funnelChart.destroy();
+
+                    const stages = this.behavioralData.funnel_analysis.stages;
+                    const colors = {
+                        awareness: { bg: 'rgba(59, 130, 246, 0.7)', border: '#3b82f6' },
+                        consideration: { bg: 'rgba(245, 158, 11, 0.7)', border: '#f59e0b' },
+                        purchase: { bg: 'rgba(16, 185, 129, 0.7)', border: '#10b981' },
+                    };
+
+                    this._funnelChart = new Chart(ctx, {
+                        type: 'bar',
+                        data: {
+                            labels: stages.map(s => s.stage.charAt(0).toUpperCase() + s.stage.slice(1)),
+                            datasets: [{
+                                data: stages.map(s => s.percentage),
+                                backgroundColor: stages.map(s => colors[s.stage]?.bg || '#94a3b8'),
+                                borderColor: stages.map(s => colors[s.stage]?.border || '#64748b'),
+                                borderWidth: 2,
+                                borderRadius: 8,
+                            }],
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: { legend: { display: false } },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    max: 100,
+                                    ticks: { callback: v => v + '%' },
+                                    grid: { color: '#f1f5f9' },
+                                },
+                                x: { grid: { display: false } },
+                            },
+                        },
+                    });
                 },
 
                 renderTrendsChart() {
