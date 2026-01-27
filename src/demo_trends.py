@@ -1,11 +1,15 @@
-"""Demo trend data generators for TikTok, Instagram, and Amazon.
+"""Demo data generators for cross-platform search intelligence prototype.
 
-Generates realistic simulated time-series data (0-100 scale) based on
-the actual Google Web trend pattern. Each platform applies characteristic
-offsets, lags, and noise to produce believable divergence patterns.
+Provides two kinds of demo data:
+1. Time-series trend data (0-100 scale) for the trend chart
+2. Search volume estimates for the distribution page
 
-These are clearly labeled as demo/simulated data in the API response
-to show what the prototype would look like with a KeywordTool.io license.
+All demo data is:
+- Deterministic (same keyword always produces the same numbers)
+- Clearly labeled as demo/simulated in the API response
+- Based on real Google/YouTube data patterns when available
+
+These show what the full product would look like with a KeywordTool.io license.
 """
 
 import hashlib
@@ -155,3 +159,88 @@ def generate_demo_trend(
         })
 
     return result
+
+
+def generate_demo_volume(
+    keyword: str,
+    platform: str,
+    google_volume: int = 0,
+) -> dict:
+    """
+    Generate a realistic demo search volume / engagement number for a platform.
+
+    Uses the Google search volume as an anchor and applies platform-specific
+    ratios based on industry benchmarks.
+
+    Platform ratios (relative to Google search volume):
+    - TikTok: 5-25% of Google (engagement interactions, not searches)
+    - Instagram: 3-15% of Google (engagement interactions)
+    - Pinterest: Interest index 15-75 (0-100 scale, independent)
+
+    Args:
+        keyword: The search keyword (for deterministic seeding).
+        platform: One of "tiktok", "instagram", "pinterest".
+        google_volume: Real Google search volume (anchor for ratios).
+
+    Returns:
+        Dict with volume, trend, confidence, and demo flag.
+    """
+    rng = random.Random(_seed_from_keyword(keyword, platform))
+
+    # Use Google volume as anchor, or a default if not available
+    anchor = google_volume if google_volume > 0 else 10000
+
+    configs = {
+        "tiktok": {
+            "ratio_range": (0.05, 0.25),  # 5-25% of Google as engagement
+            "trend_weights": {"growing": 0.45, "stable": 0.35, "declining": 0.20},
+            "metric_type": "engagement",
+        },
+        "instagram": {
+            "ratio_range": (0.03, 0.15),  # 3-15% of Google as engagement
+            "trend_weights": {"growing": 0.35, "stable": 0.45, "declining": 0.20},
+            "metric_type": "engagement",
+        },
+        "pinterest": {
+            "ratio_range": None,  # Pinterest uses 0-100 interest index
+            "interest_range": (15, 75),
+            "trend_weights": {"growing": 0.30, "stable": 0.50, "declining": 0.20},
+            "metric_type": "interest_index",
+        },
+    }
+
+    config = configs.get(platform)
+    if not config:
+        return {"volume": 0, "demo": True}
+
+    # Generate volume
+    if platform == "pinterest":
+        lo, hi = config["interest_range"]
+        volume = rng.randint(lo, hi)
+    else:
+        lo, hi = config["ratio_range"]
+        ratio = rng.uniform(lo, hi)
+        volume = int(anchor * ratio)
+        # Add some noise to avoid looking too formulaic
+        volume = max(100, int(volume * rng.uniform(0.8, 1.2)))
+
+    # Generate trend
+    trend_roll = rng.random()
+    weights = config["trend_weights"]
+    if trend_roll < weights["growing"]:
+        trend = "growing"
+        trend_velocity = round(rng.uniform(1.05, 1.35), 2)
+    elif trend_roll < weights["growing"] + weights["stable"]:
+        trend = "stable"
+        trend_velocity = round(rng.uniform(0.90, 1.10), 2)
+    else:
+        trend = "declining"
+        trend_velocity = round(rng.uniform(0.70, 0.90), 2)
+
+    return {
+        "volume": volume,
+        "trend": trend,
+        "trend_velocity": trend_velocity,
+        "confidence": "demo",
+        "demo": True,
+    }

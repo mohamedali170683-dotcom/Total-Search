@@ -1282,8 +1282,18 @@ async def analyze_demand_distribution(
         if weight_preset not in WEIGHT_PRESETS:
             weight_preset = "general"
 
+        # Collect demo platforms across all keywords
+        all_demo_platforms = set()
+        for kw_data in results.values():
+            all_demo_platforms.update(kw_data.get("demo_platforms", []))
+
         # Calculate demand distribution
         distribution = _calculate_demand_distribution(results, weight_preset=weight_preset)
+
+        # Mark demo platforms in the platform list
+        for plat in distribution.get("platforms", []):
+            if plat["platform"] in all_demo_platforms:
+                plat["is_demo"] = True
 
         return {
             "keywords": keyword_list,
@@ -1299,6 +1309,7 @@ async def analyze_demand_distribution(
             "insights": distribution["insights"],
             "recommendations": distribution["recommendations"],
             "keyword_details": results,
+            "demo_platforms": list(all_demo_platforms),
         }
 
     except HTTPException:
@@ -1447,6 +1458,24 @@ async def _fetch_demand_data(keywords: list[str], country: str = "us", language:
                         "confidence": "none",
                         "isVerifiedSearchData": False,
                     }
+
+        # Inject demo data for TikTok, Instagram, Pinterest when real data is 0
+        from src.demo_trends import generate_demo_volume
+
+        demo_platforms_set = {"tiktok", "instagram", "pinterest"}
+        for kw, kw_data in results.items():
+            google_volume = kw_data.get("platforms", {}).get("google", {}).get("volume", 0)
+            for plat in demo_platforms_set:
+                plat_data = kw_data.get("platforms", {}).get(plat, {})
+                if not plat_data.get("volume"):
+                    demo = generate_demo_volume(kw, plat, google_volume=google_volume)
+                    kw_data["platforms"][plat] = {
+                        "volume": demo["volume"],
+                        "trend": demo["trend"],
+                        "trend_velocity": demo["trend_velocity"],
+                        "confidence": "demo",
+                    }
+                    kw_data.setdefault("demo_platforms", []).append(plat)
 
     except Exception as e:
         import logging
@@ -2130,15 +2159,31 @@ def _compute_trend_correlation(
     """
     Compute cross-platform trend correlation analysis.
 
-    Extracts time series for the primary keyword from each platform,
-    computes Pearson correlation, and detects lead/lag relationships.
+    Uses Spearman rank correlation (robust to non-linear relationships and
+    outliers) with cross-correlation lag detection, plus Granger causality
+    testing to determine if one platform's trends statistically predict
+    another's.
+
+    Returns pairs with correlation metrics, lag info, Granger causality
+    p-values, and human-readable insights.
     """
     try:
         import numpy as np
+        from scipy.stats import spearmanr
     except ImportError:
-        return {"error": "numpy not installed"}
+        return {"error": "numpy/scipy not installed"}
 
-    results: dict = {"pairs": [], "insights": []}
+    # Granger causality is optional — statsmodels is heavier
+    granger_available = False
+    try:
+        from statsmodels.tsa.stattools import grangercausalitytests
+        granger_available = True
+    except ImportError:
+        pass
+
+    results: dict = {"pairs": [], "insights": [], "method": "spearman"}
+    if granger_available:
+        results["method"] = "spearman+granger"
 
     # Extract time series values per platform
     series_by_platform: dict[str, list[float]] = {}
@@ -2149,7 +2194,6 @@ def _compute_trend_correlation(
             continue
 
         if platform_name in ("tiktok", "amazon", "instagram"):
-            # Demo platforms use their platform name as the data key
             values = [float(entry.get(platform_name, 0)) for entry in iot]
         else:
             values = [float(entry.get(primary_keyword, 0)) for entry in iot]
@@ -2160,83 +2204,150 @@ def _compute_trend_correlation(
     if len(series_by_platform) < 2:
         return results
 
-    # Compare each pair
+    def _safe_granger(cause: np.ndarray, effect: np.ndarray, max_lag: int) -> dict:
+        """Run Granger causality test, return best lag and p-value."""
+        if not granger_available or len(cause) < max_lag + 3:
+            return {"tested": False}
+        try:
+            data = np.column_stack([effect, cause])
+            test_result = grangercausalitytests(data, maxlag=max_lag, verbose=False)
+            best_p = 1.0
+            best_lag = 1
+            for lag_val, res in test_result.items():
+                p_val = res[0]["ssr_ftest"][1]
+                if p_val < best_p:
+                    best_p = p_val
+                    best_lag = lag_val
+            return {"tested": True, "p_value": round(best_p, 4), "lag": best_lag}
+        except Exception:
+            return {"tested": False}
+
     platform_names = list(series_by_platform.keys())
     for i in range(len(platform_names)):
         for j in range(i + 1, len(platform_names)):
             p1, p2 = platform_names[i], platform_names[j]
             s1, s2 = series_by_platform[p1], series_by_platform[p2]
 
-            # Align lengths (trim to shorter)
             min_len = min(len(s1), len(s2))
             if min_len < 4:
                 continue
             a1 = np.array(s1[-min_len:], dtype=float)
             a2 = np.array(s2[-min_len:], dtype=float)
 
-            # Skip if either series is constant
             if np.std(a1) == 0 or np.std(a2) == 0:
                 continue
 
-            # Base correlation (no lag)
-            base_corr = float(np.corrcoef(a1, a2)[0, 1])
+            # Spearman rank correlation (base, no lag)
+            base_rho, base_p = spearmanr(a1, a2)
+            base_rho = float(base_rho)
+            base_p = float(base_p)
 
-            # Cross-correlate with lags 1-4 to find lead/lag
+            # Cross-correlate with lags 1-4 using Spearman
             best_lag = 0
-            best_corr = abs(base_corr)
-            best_corr_signed = base_corr
+            best_rho = abs(base_rho)
+            best_rho_signed = base_rho
+            best_p_val = base_p
 
-            for lag in range(1, min(5, min_len - 2)):
+            max_lag = min(5, min_len - 2)
+            for lag in range(1, max_lag):
                 # p2 leads p1 by 'lag' periods
-                corr_val = float(np.corrcoef(a1[lag:], a2[:-lag])[0, 1])
-                if abs(corr_val) > best_corr:
-                    best_corr = abs(corr_val)
-                    best_corr_signed = corr_val
+                rho, p = spearmanr(a1[lag:], a2[:-lag])
+                if abs(rho) > best_rho:
+                    best_rho = abs(rho)
+                    best_rho_signed = float(rho)
+                    best_p_val = float(p)
                     best_lag = lag
 
                 # p1 leads p2 by 'lag' periods
-                corr_val = float(np.corrcoef(a1[:-lag], a2[lag:])[0, 1])
-                if abs(corr_val) > best_corr:
-                    best_corr = abs(corr_val)
-                    best_corr_signed = corr_val
+                rho, p = spearmanr(a1[:-lag], a2[lag:])
+                if abs(rho) > best_rho:
+                    best_rho = abs(rho)
+                    best_rho_signed = float(rho)
+                    best_p_val = float(p)
                     best_lag = -lag
+
+            # Granger causality: does p2 Granger-cause p1? And vice versa?
+            granger_max = min(4, min_len // 3)
+            gc_p2_causes_p1 = _safe_granger(a2, a1, granger_max)
+            gc_p1_causes_p2 = _safe_granger(a1, a2, granger_max)
 
             pair_result = {
                 "platform_a": p1,
                 "platform_b": p2,
-                "correlation": round(best_corr_signed, 3),
+                "spearman_rho": round(best_rho_signed, 3),
+                "p_value": round(best_p_val, 4),
                 "lag_periods": best_lag,
                 "relationship": "synchronized",
+                "significant": best_p_val < 0.05,
             }
 
-            if best_corr > 0.4 and best_lag > 0:
-                pair_result["relationship"] = f"{p2} leads {p1} by ~{best_lag} week(s)"
+            # Include Granger results if available
+            if gc_p2_causes_p1.get("tested"):
+                pair_result["granger_b_causes_a"] = {
+                    "p_value": gc_p2_causes_p1["p_value"],
+                    "lag": gc_p2_causes_p1["lag"],
+                    "significant": gc_p2_causes_p1["p_value"] < 0.05,
+                }
+            if gc_p1_causes_p2.get("tested"):
+                pair_result["granger_a_causes_b"] = {
+                    "p_value": gc_p1_causes_p2["p_value"],
+                    "lag": gc_p1_causes_p2["lag"],
+                    "significant": gc_p1_causes_p2["p_value"] < 0.05,
+                }
+
+            # Also keep "correlation" key for backward compatibility
+            pair_result["correlation"] = pair_result["spearman_rho"]
+
+            # Generate insight text
+            p1_label = p1.replace("_", " ").title()
+            p2_label = p2.replace("_", " ").title()
+
+            # Priority 1: Granger causality (strongest evidence)
+            gc_insight_added = False
+            if gc_p2_causes_p1.get("tested") and gc_p2_causes_p1["p_value"] < 0.05:
+                pair_result["relationship"] = f"{p2} predicts {p1} (Granger, lag {gc_p2_causes_p1['lag']})"
                 results["insights"].append(
-                    f"{p2.replace('_', ' ').title()} trends lead "
-                    f"{p1.replace('_', ' ').title()} by ~{best_lag} week(s) "
-                    f"(r={best_corr_signed:.2f}). Social signals may predict search demand."
+                    f"{p2_label} statistically predicts {p1_label} trends "
+                    f"(Granger p={gc_p2_causes_p1['p_value']:.3f}, lag={gc_p2_causes_p1['lag']}). "
+                    f"Discovery on {p2_label} leads to search on {p1_label}."
                 )
-            elif best_corr > 0.4 and best_lag < 0:
-                pair_result["relationship"] = f"{p1} leads {p2} by ~{abs(best_lag)} week(s)"
+                gc_insight_added = True
+            elif gc_p1_causes_p2.get("tested") and gc_p1_causes_p2["p_value"] < 0.05:
+                pair_result["relationship"] = f"{p1} predicts {p2} (Granger, lag {gc_p1_causes_p2['lag']})"
                 results["insights"].append(
-                    f"{p1.replace('_', ' ').title()} trends lead "
-                    f"{p2.replace('_', ' ').title()} by ~{abs(best_lag)} week(s) "
-                    f"(r={best_corr_signed:.2f})."
+                    f"{p1_label} statistically predicts {p2_label} trends "
+                    f"(Granger p={gc_p1_causes_p2['p_value']:.3f}, lag={gc_p1_causes_p2['lag']}). "
+                    f"Search intent on {p1_label} precedes {p2_label} engagement."
                 )
-            elif best_corr > 0.6:
-                pair_result["relationship"] = "strongly synchronized"
-                results["insights"].append(
-                    f"{p1.replace('_', ' ').title()} and "
-                    f"{p2.replace('_', ' ').title()} trends are strongly correlated "
-                    f"(r={best_corr_signed:.2f}). Interest moves together across platforms."
-                )
-            elif best_corr < 0.2:
-                pair_result["relationship"] = "independent"
-                results["insights"].append(
-                    f"{p1.replace('_', ' ').title()} and "
-                    f"{p2.replace('_', ' ').title()} trends appear independent "
-                    f"(r={best_corr_signed:.2f}). Platforms serve different audiences."
-                )
+                gc_insight_added = True
+
+            # Priority 2: Spearman lag relationship
+            if not gc_insight_added:
+                if best_rho > 0.4 and best_lag > 0 and best_p_val < 0.05:
+                    pair_result["relationship"] = f"{p2} leads {p1} by ~{best_lag} week(s)"
+                    results["insights"].append(
+                        f"{p2_label} trends lead {p1_label} by ~{best_lag} week(s) "
+                        f"(ρ={best_rho_signed:.2f}, p={best_p_val:.3f})."
+                    )
+                elif best_rho > 0.4 and best_lag < 0 and best_p_val < 0.05:
+                    pair_result["relationship"] = f"{p1} leads {p2} by ~{abs(best_lag)} week(s)"
+                    results["insights"].append(
+                        f"{p1_label} trends lead {p2_label} by ~{abs(best_lag)} week(s) "
+                        f"(ρ={best_rho_signed:.2f}, p={best_p_val:.3f})."
+                    )
+                elif best_rho > 0.6 and best_p_val < 0.05:
+                    pair_result["relationship"] = "strongly synchronized"
+                    results["insights"].append(
+                        f"{p1_label} and {p2_label} are strongly correlated "
+                        f"(ρ={best_rho_signed:.2f}, p={best_p_val:.3f}). "
+                        f"Interest moves together across platforms."
+                    )
+                elif best_rho < 0.2 or best_p_val >= 0.05:
+                    pair_result["relationship"] = "independent"
+                    results["insights"].append(
+                        f"{p1_label} and {p2_label} appear independent "
+                        f"(ρ={best_rho_signed:.2f}, p={best_p_val:.3f})."
+                    )
 
             results["pairs"].append(pair_result)
 

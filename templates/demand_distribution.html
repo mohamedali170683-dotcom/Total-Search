@@ -267,6 +267,7 @@
                                                         }"
                                                         x-text="platform.metric_type === 'search_volume' ? 'search' : (platform.metric_type === 'engagement' ? 'social' : 'discovery')"
                                                     ></span>
+                                                    <span x-show="platform.is_demo" class="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-500 font-medium">Demo</span>
                                                 </div>
                                                 <div class="flex items-center space-x-2">
                                                     <span class="text-slate-900 font-bold text-base" x-text="formatNumber(platform.volume)"></span>
@@ -647,22 +648,39 @@
 
                             <!-- Correlation Insight Card -->
                             <div x-show="trendsData?.correlation_analysis?.insights?.length" class="mt-4 p-4 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-xl border border-indigo-200">
-                                <h5 class="text-sm font-semibold text-indigo-800 mb-2">
-                                    <i class="fas fa-link mr-1"></i> Cross-Platform Correlation
-                                </h5>
+                                <div class="flex items-center justify-between mb-2">
+                                    <h5 class="text-sm font-semibold text-indigo-800">
+                                        <i class="fas fa-link mr-1"></i> Cross-Platform Correlation
+                                    </h5>
+                                    <span class="text-xs px-2 py-0.5 bg-indigo-100 text-indigo-600 rounded-full"
+                                        x-text="(trendsData?.correlation_analysis?.method || 'pearson').replace('+', ' + ')">
+                                    </span>
+                                </div>
                                 <template x-for="insight in (trendsData?.correlation_analysis?.insights || [])" :key="insight">
                                     <p class="text-sm text-indigo-700 mb-1" x-text="insight"></p>
                                 </template>
-                                <div x-show="trendsData?.correlation_analysis?.pairs?.length" class="mt-2 flex flex-wrap gap-2">
+                                <div x-show="trendsData?.correlation_analysis?.pairs?.length" class="mt-3 space-y-2">
                                     <template x-for="pair in (trendsData?.correlation_analysis?.pairs || [])" :key="pair.platform_a + pair.platform_b">
-                                        <span class="text-xs px-2 py-1 rounded-full"
-                                            :class="{
-                                                'bg-green-100 text-green-700': Math.abs(pair.correlation) > 0.6,
-                                                'bg-amber-100 text-amber-700': Math.abs(pair.correlation) >= 0.3 && Math.abs(pair.correlation) <= 0.6,
-                                                'bg-slate-100 text-slate-600': Math.abs(pair.correlation) < 0.3
-                                            }"
-                                            x-text="pair.platform_a.replace('_',' ') + ' / ' + pair.platform_b.replace('_',' ') + ': r=' + pair.correlation">
-                                        </span>
+                                        <div class="flex items-center justify-between p-2 bg-white/60 rounded-lg">
+                                            <span class="text-xs font-medium text-slate-700"
+                                                x-text="pair.platform_a.replace('_',' ') + ' / ' + pair.platform_b.replace('_',' ')">
+                                            </span>
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-xs px-2 py-0.5 rounded-full"
+                                                    :class="{
+                                                        'bg-green-100 text-green-700': pair.significant && Math.abs(pair.spearman_rho || pair.correlation) > 0.4,
+                                                        'bg-amber-100 text-amber-700': pair.significant && Math.abs(pair.spearman_rho || pair.correlation) <= 0.4,
+                                                        'bg-slate-100 text-slate-500': !pair.significant
+                                                    }"
+                                                    x-text="'ρ=' + (pair.spearman_rho ?? pair.correlation) + (pair.significant ? ' *' : '')">
+                                                </span>
+                                                <template x-if="pair.granger_b_causes_a?.significant || pair.granger_a_causes_b?.significant">
+                                                    <span class="text-xs px-2 py-0.5 bg-purple-100 text-purple-700 rounded-full font-medium">
+                                                        <i class="fas fa-bolt mr-0.5"></i>Granger
+                                                    </span>
+                                                </template>
+                                            </div>
+                                        </div>
                                     </template>
                                 </div>
                             </div>
@@ -1278,16 +1296,30 @@ Generated by Total Search — Cross-Platform Search Intelligence`;
                     }
 
                     // Social-to-search signal from correlation
-                    if (trends?.correlation_analysis?.insights?.length) {
-                        const leadInsight = trends.correlation_analysis.insights.find(i => i.includes('lead'));
-                        if (leadInsight) {
+                    if (trends?.correlation_analysis?.pairs?.length) {
+                        const grangerPair = trends.correlation_analysis.pairs.find(
+                            p => p.granger_b_causes_a?.significant || p.granger_a_causes_b?.significant
+                        );
+                        if (grangerPair) {
+                            const gcInsight = trends.correlation_analysis.insights.find(i => i.includes('Granger'));
                             opps.push({
-                                title: 'Social-to-Search Signal',
-                                description: leadInsight,
+                                title: 'Predictive Signal Detected',
+                                description: gcInsight || `${grangerPair.platform_a} and ${grangerPair.platform_b} show statistically significant predictive relationship (Granger causality).`,
                                 priority: 'high',
-                                icon: 'fas fa-link text-indigo-600',
-                                iconBg: 'bg-indigo-100',
+                                icon: 'fas fa-bolt text-purple-600',
+                                iconBg: 'bg-purple-100',
                             });
+                        } else {
+                            const leadInsight = trends.correlation_analysis.insights.find(i => i.includes('lead'));
+                            if (leadInsight) {
+                                opps.push({
+                                    title: 'Cross-Platform Lead Signal',
+                                    description: leadInsight,
+                                    priority: 'medium',
+                                    icon: 'fas fa-link text-indigo-600',
+                                    iconBg: 'bg-indigo-100',
+                                });
+                            }
                         }
                     }
 
