@@ -193,12 +193,21 @@
 
         <!-- Results Section -->
         <div x-show="hasResults" x-cloak>
+            <!-- Q1 Header: Where are users searching? -->
+            <div class="mb-6">
+                <h2 class="text-lg font-bold text-slate-900">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-blue-600 text-white text-sm font-bold mr-2">1</span>
+                    Where are users searching?
+                </h2>
+                <p class="text-sm text-slate-500 mt-1 ml-9">Total search volume across platforms — where the demand actually lives</p>
+            </div>
+
             <!-- Summary Stats Row -->
             <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 <div class="card card-hover p-5 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
-                    <p class="text-xs font-medium text-blue-600 uppercase tracking-wide">Search Index</p>
-                    <p class="text-3xl font-bold text-blue-700 mt-1" x-text="(results?.demand_index || 0) + '/100'"></p>
-                    <p class="text-xs text-blue-400 mt-1">cross-platform composite score</p>
+                    <p class="text-xs font-medium text-blue-600 uppercase tracking-wide">Total Search Volume</p>
+                    <p class="text-3xl font-bold text-blue-700 mt-1" x-text="formatNumber(getTotalVolume())"></p>
+                    <p class="text-xs text-blue-400 mt-1">monthly across all platforms</p>
                 </div>
                 <div class="card card-hover p-5">
                     <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Active Platforms</p>
@@ -209,7 +218,7 @@
                     <p class="text-xs font-medium text-slate-500 uppercase tracking-wide">Top Platform</p>
                     <p class="text-2xl font-bold text-slate-900 mt-1" x-text="results?.distribution_summary?.top_platform_name || '-'"></p>
                     <p class="text-xs text-slate-400 mt-1">
-                        score: <span x-text="results?.distribution_summary?.top_platform_score || 0"></span>/100
+                        <span x-text="getTopPlatformShare() + '% of total volume'"></span>
                     </p>
                 </div>
             </div>
@@ -231,23 +240,23 @@
                     </div>
 
                     <div class="flex flex-col lg:flex-row gap-8">
-                        <!-- Unified Chart (all 6 platforms, normalized scores) -->
+                        <!-- Unified Chart (all 6 platforms, volume-based share) -->
                         <div class="w-full lg:w-2/5 flex items-center justify-center">
                             <div class="relative">
                                 <canvas id="distributionChart" width="220" height="220"></canvas>
                                 <div class="absolute inset-0 flex items-center justify-center pointer-events-none">
                                     <div class="text-center">
-                                        <p class="text-2xl font-bold text-blue-700" x-text="(results?.demand_index || 0) + '/100'"></p>
-                                        <p class="text-xs text-slate-500">Search Index</p>
+                                        <p class="text-2xl font-bold text-blue-700" x-text="formatNumber(getTotalVolume())"></p>
+                                        <p class="text-xs text-slate-500">Total Volume</p>
                                     </div>
                                 </div>
                             </div>
                         </div>
 
-                        <!-- All Platforms Unified -->
+                        <!-- All Platforms — Volume Share -->
                         <div class="flex-1">
                             <p class="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-3">
-                                <i class="fas fa-chart-bar mr-1"></i> Platform Search Volume
+                                <i class="fas fa-chart-bar mr-1"></i> Volume Share by Platform
                             </p>
                             <div class="space-y-3">
                                 <template x-for="platform in (results?.platforms || []).filter(p => p.volume > 0)" :key="platform.platform">
@@ -259,14 +268,8 @@
                                             <div class="flex justify-between text-sm mb-1">
                                                 <div class="flex items-center space-x-2">
                                                     <span class="font-medium text-slate-700" x-text="platform.display_name"></span>
-                                                    <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium"
-                                                        :class="{
-                                                            'bg-green-100 text-green-700': platform.metric_type === 'search_volume',
-                                                            'bg-amber-100 text-amber-700': platform.metric_type === 'engagement',
-                                                            'bg-purple-100 text-purple-700': platform.metric_type === 'interest_index'
-                                                        }"
-                                                        x-text="platform.metric_type === 'search_volume' ? 'search' : (platform.metric_type === 'engagement' ? 'social' : 'discovery')"
-                                                    ></span>
+                                                    <span class="text-[10px] px-1.5 py-0.5 rounded-full font-medium bg-blue-100 text-blue-700"
+                                                        x-text="getPlatformVolumeShare(platform) + '%'"></span>
                                                     <span x-show="platform.is_demo" class="text-[9px] px-1.5 py-0.5 rounded-full bg-slate-200 text-slate-500 font-medium">Demo</span>
                                                 </div>
                                                 <div class="flex items-center space-x-2">
@@ -275,9 +278,8 @@
                                                 </div>
                                             </div>
                                             <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
-                                                <div class="h-full rounded-full platform-bar" :style="'width: ' + Math.max(platform.normalized_score, 1) + '%; background-color: ' + platform.color"></div>
+                                                <div class="h-full rounded-full platform-bar" :style="'width: ' + Math.max(getPlatformVolumeShare(platform), 1) + '%; background-color: ' + platform.color"></div>
                                             </div>
-                                            <p class="text-[10px] text-slate-400 mt-0.5" x-text="'Search Index: ' + platform.normalized_score + '/100 (' + platform.percentage + '%)'"></p>
                                         </div>
                                         <div class="w-10 text-right ml-3">
                                             <span x-show="platform.trend === 'growing'" class="text-green-500 text-sm"><i class="fas fa-arrow-up"></i></span>
@@ -293,31 +295,35 @@
 
                 <!-- Key Insight Panel -->
                 <div class="card p-6 bg-gradient-to-br from-blue-50 to-indigo-50 border-blue-100">
-                    <h3 class="text-lg font-semibold text-slate-900 mb-4">Search Overview</h3>
+                    <h3 class="text-lg font-semibold text-slate-900 mb-4">Volume Overview</h3>
 
                     <div class="text-center py-4">
-                        <p class="text-5xl font-bold text-blue-600" x-text="results?.demand_index || 0"></p>
-                        <p class="text-slate-500 mt-1 font-medium text-sm">Search Index <span class="text-slate-400">/ 100</span></p>
+                        <p class="text-4xl font-bold text-blue-600" x-text="formatNumber(getTotalVolume())"></p>
+                        <p class="text-slate-500 mt-1 font-medium text-sm">Total Monthly Volume</p>
                     </div>
 
                     <div class="bg-white/60 rounded-xl p-4 mt-3">
                         <p class="text-sm text-slate-600">
                             <span class="font-bold text-slate-900" x-text="results?.distribution_summary?.top_platform_name || '-'"></span>
-                            leads with a score of
-                            <span class="font-bold text-blue-600" x-text="(results?.distribution_summary?.top_platform_score || 0) + '/100'"></span>
+                            leads with
+                            <span class="font-bold text-blue-600" x-text="getTopPlatformShare() + '%'"></span>
+                            of total volume
                         </p>
                     </div>
 
-                    <!-- Platform raw values summary -->
+                    <!-- Platform volume breakdown -->
                     <div class="mt-3 bg-white/40 rounded-xl p-3 space-y-2">
-                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Raw Metrics</p>
+                        <p class="text-xs font-semibold text-slate-500 uppercase tracking-wide">Volume by Platform</p>
                         <template x-for="platform in (results?.platforms || []).filter(p => p.volume > 0)" :key="'insight-' + platform.platform">
                             <div class="flex items-center justify-between text-sm">
                                 <span class="text-slate-600">
                                     <i :class="platform.icon" class="mr-1" :style="'color: ' + platform.color"></i>
                                     <span x-text="platform.display_name"></span>
                                 </span>
-                                <span class="font-semibold text-slate-800" x-text="formatNumber(platform.volume) + (platform.metric_type === 'interest_index' ? '/100' : '')"></span>
+                                <div class="flex items-center gap-2">
+                                    <span class="font-semibold text-slate-800" x-text="formatNumber(platform.volume)"></span>
+                                    <span class="text-[10px] text-slate-400" x-text="getPlatformVolumeShare(platform) + '%'"></span>
+                                </div>
                             </div>
                         </template>
                     </div>
@@ -496,17 +502,17 @@
                     <!-- FAQ 2 -->
                     <div class="border border-slate-200 rounded-lg overflow-hidden">
                         <button @click="openFaq = openFaq === 2 ? null : 2" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">What is the Search Index?</span>
+                            <span class="font-medium text-slate-800">How is the volume share calculated?</span>
                             <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 2 }"></i>
                         </button>
                         <div x-show="openFaq === 2" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>The Search Index is a composite score from 0 to 100 that summarizes overall search demand across all platforms. It works by:</p>
+                            <p>The volume share pie chart shows each platform's percentage of total search volume. It works by:</p>
                             <ol class="mt-2 ml-4 list-decimal space-y-1">
-                                <li><strong>Normalizing</strong> each platform's raw metric to a 0-100 scale using logarithmic scaling (so a platform with 1,000 searches and one with 10,000 interactions are comparable)</li>
-                                <li><strong>Weighting</strong> each platform by its relevance: Google (25%), YouTube (18%), Amazon (18%), TikTok (13%), Instagram (13%), Pinterest (13%)</li>
-                                <li><strong>Averaging</strong> the weighted scores into a single number</li>
+                                <li><strong>Summing</strong> raw metrics from all platforms (search volume, engagement, interest index)</li>
+                                <li><strong>Calculating share</strong> as each platform's volume divided by the total, expressed as a percentage</li>
+                                <li><strong>Displaying</strong> both the raw volume and the percentage share for each platform</li>
                             </ol>
-                            <p class="mt-2">A Search Index of 70+ indicates strong cross-platform demand. Below 30 suggests the keyword has limited presence across platforms.</p>
+                            <p class="mt-2">This tells you where your audience actually searches. A platform with 60%+ share is the dominant channel for your keywords.</p>
                         </div>
                     </div>
                     <!-- FAQ 3 -->
@@ -596,14 +602,23 @@
                 </div>
             </div>
 
+            <!-- Q2: What is driving search interest? -->
+            <div class="mt-8 mb-6">
+                <h2 class="text-lg font-bold text-slate-900">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-indigo-600 text-white text-sm font-bold mr-2">2</span>
+                    What is driving search interest?
+                </h2>
+                <p class="text-sm text-slate-500 mt-1 ml-9">Trend momentum, seasonality, geographic hotspots, and emerging queries</p>
+            </div>
+
             <!-- Cross-Platform Trends Intelligence Section -->
-            <div class="card p-6 mt-6" x-show="hasResults">
+            <div class="card p-6" x-show="hasResults">
                 <div class="flex items-center justify-between mb-6">
                     <div>
                         <h3 class="text-lg font-semibold text-slate-900">
-                            <i class="fas fa-chart-line text-blue-500 mr-2"></i>Cross-Platform Search Intelligence
+                            <i class="fas fa-chart-line text-indigo-500 mr-2"></i>Trend Intelligence
                         </h3>
-                        <p class="text-sm text-slate-500 mt-1">Google Web + YouTube + Amazon + TikTok + Instagram trend analysis & correlation</p>
+                        <p class="text-sm text-slate-500 mt-1">Trend momentum, seasonality, and cross-platform signals</p>
                     </div>
                     <button
                         @click="loadTrendsIntelligence()"
@@ -805,11 +820,20 @@
                 </div>
             </div>
 
+            <!-- Q3: What can we learn from search behavior? -->
+            <div class="mt-8 mb-6">
+                <h2 class="text-lg font-bold text-slate-900">
+                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-violet-600 text-white text-sm font-bold mr-2">3</span>
+                    What can we learn from search behavior?
+                </h2>
+                <p class="text-sm text-slate-500 mt-1 ml-9">Funnel stage analysis, share of search, and behavioral modifier signals</p>
+            </div>
+
             <!-- Behavioral Intelligence Section -->
-            <div class="card p-6 mt-6" x-show="hasResults">
+            <div class="card p-6" x-show="hasResults">
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-semibold text-slate-900">
-                        <i class="fas fa-brain text-violet-500 mr-2"></i>Behavioral Search Intelligence
+                        <i class="fas fa-brain text-violet-500 mr-2"></i>Search Behavior Insights
                     </h3>
                     <button
                         @click="loadBehavioralAnalysis()"
@@ -966,10 +990,15 @@
             <div class="inline-block p-8 bg-white rounded-2xl shadow-sm mb-6">
                 <i class="fas fa-chart-pie text-6xl text-slate-300"></i>
             </div>
-            <h2 class="text-2xl font-bold text-slate-900 mb-2">Discover Where Your Audience Searches</h2>
+            <h2 class="text-2xl font-bold text-slate-900 mb-2">Total Search Intelligence</h2>
             <p class="text-slate-500 max-w-md mx-auto">
-                Enter keywords above to analyze demand across Google, YouTube, Amazon, TikTok, Instagram, and Pinterest.
+                Enter keywords above to discover: <strong>where</strong> your audience searches, <strong>what</strong> drives their interest, and <strong>what</strong> their behavior reveals.
             </p>
+            <div class="flex justify-center gap-6 mt-6 text-sm text-slate-400">
+                <span><span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-blue-100 text-blue-600 text-xs font-bold mr-1">1</span> Where</span>
+                <span><span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-indigo-100 text-indigo-600 text-xs font-bold mr-1">2</span> What drives</span>
+                <span><span class="inline-flex items-center justify-center w-5 h-5 rounded-full bg-violet-100 text-violet-600 text-xs font-bold mr-1">3</span> Behavior</span>
+            </div>
         </div>
 
         <!-- Loading State -->
@@ -1028,6 +1057,24 @@
                         'jp': 'Japan'
                     };
                     return countries[this.selectedCountry] || this.selectedCountry;
+                },
+
+                getTotalVolume() {
+                    return (this.results?.platforms || []).reduce((sum, p) => sum + (p.volume || 0), 0);
+                },
+
+                getPlatformVolumeShare(platform) {
+                    const total = this.getTotalVolume();
+                    if (total === 0) return '0.0';
+                    return ((platform.volume / total) * 100).toFixed(1);
+                },
+
+                getTopPlatformShare() {
+                    const top = this.getTopPlatform();
+                    if (!top) return '0';
+                    const total = this.getTotalVolume();
+                    if (total === 0) return '0';
+                    return ((top.volume / total) * 100).toFixed(1);
                 },
 
                 getTopPlatform() {
@@ -1093,15 +1140,16 @@
                         this.chart.destroy();
                     }
 
-                    // Show ALL platforms with normalized scores (unified view)
-                    const platforms = (this.results?.platforms || []).filter(p => p.normalized_score > 0);
+                    // Show ALL platforms with volume > 0 (volume-based share)
+                    const platforms = (this.results?.platforms || []).filter(p => p.volume > 0);
+                    const totalVol = platforms.reduce((sum, p) => sum + p.volume, 0);
 
                     this.chart = new Chart(ctx, {
                         type: 'doughnut',
                         data: {
                             labels: platforms.map(p => p.display_name),
                             datasets: [{
-                                data: platforms.map(p => p.normalized_score),
+                                data: platforms.map(p => p.volume),
                                 backgroundColor: platforms.map(p => p.color),
                                 borderWidth: 0,
                                 borderRadius: 4,
@@ -1124,10 +1172,9 @@
                                         label: (context) => {
                                             const idx = context.dataIndex;
                                             const p = platforms[idx];
-                                            const score = p.normalized_score;
-                                            const raw = this.formatNumber(p.volume);
-                                            const label = p.metric_label.toLowerCase();
-                                            return `${context.label}: ${score}/100 (raw: ${raw} ${label})`;
+                                            const vol = this.formatNumber(p.volume);
+                                            const pct = totalVol > 0 ? ((p.volume / totalVol) * 100).toFixed(1) : '0';
+                                            return `${context.label}: ${vol} (${pct}%)`;
                                         }
                                     }
                                 }
@@ -1178,16 +1225,19 @@
                     const platforms = (this.results.platforms || []).filter(p => p.volume > 0);
 
                     const profileLabel = this.results.weight_preset_label || 'General';
+                    const totalVol = this.getTotalVolume();
                     const summary = `Total Search Analysis (${this.getCountryName()})
 ============================
 Audience Profile: ${profileLabel}
+Total Search Volume: ${this.formatNumber(totalVol)} monthly
 
-Search Index: ${this.results.demand_index}/100 (cross-platform composite score)
+Platform Volume Share:
+${platforms.map(p => {
+    const pct = totalVol > 0 ? ((p.volume / totalVol) * 100).toFixed(1) : '0';
+    return `  - ${p.display_name}: ${this.formatNumber(p.volume)} (${pct}%)`;
+}).join('\n')}
 
-Platform Breakdown:
-${platforms.map(p => `  - ${p.display_name}: ${p.normalized_score}/100 (raw: ${this.formatNumber(p.volume)} ${p.metric_label.toLowerCase()})`).join('\n')}
-
-Top Platform: ${this.results.distribution_summary?.top_platform_name || '-'} (${this.results.distribution_summary?.top_platform_score || 0}/100)
+Top Platform: ${this.results.distribution_summary?.top_platform_name || '-'} (${this.getTopPlatformShare()}% of volume)
 
 Generated by Total Search — Cross-Platform Search Intelligence`;
                     navigator.clipboard.writeText(summary).then(() => {
