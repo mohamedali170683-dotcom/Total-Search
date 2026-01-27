@@ -2143,6 +2143,7 @@ async def analyze_behavioral_intelligence(
 
     try:
         from src.clients.dataforseo import DataForSEOClient
+        from src.config import get_settings
         from src.behavioral_analysis import (
             get_all_behavioral_keywords,
             analyze_funnel,
@@ -2150,6 +2151,7 @@ async def analyze_behavioral_intelligence(
             analyze_modifier_pairs,
         )
 
+        settings = get_settings()
         brand_list = [b.strip() for b in brands.split(",") if b.strip()]
 
         # Get all keywords needed in a single list
@@ -2175,9 +2177,9 @@ async def analyze_behavioral_intelligence(
                 location_code=location_code,
                 language_code=lang_code,
             )
-            for m in metrics:
-                if hasattr(m, "keyword") and hasattr(m, "search_volume"):
-                    keyword_volumes[m.keyword] = m.search_volume or 0
+            # Metrics are returned in the same order as input keywords
+            for kw, m in zip(all_keywords, metrics):
+                keyword_volumes[kw] = m.search_volume or 0
 
         # Run all three analyses
         funnel = analyze_funnel(keyword, keyword_volumes, language)
