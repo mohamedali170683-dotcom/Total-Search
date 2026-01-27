@@ -536,12 +536,12 @@ class DataForSEOClient(BaseAPIClient):
                 "/v3/serp/google/organic/live/regular",
                 json_data=payload,
             )
-            return self._parse_serp_response(response)
+            return self._parse_serp_response(response, depth=depth)
         except Exception as e:
             logger.error(f"Failed to fetch SERP results for '{keyword}': {e}")
             return {"organic_results": [], "serp_features": [], "people_also_ask": []}
 
-    def _parse_serp_response(self, response: dict[str, Any]) -> dict[str, Any]:
+    def _parse_serp_response(self, response: dict[str, Any], depth: int = 20) -> dict[str, Any]:
         """Parse DataForSEO SERP response into structured results."""
         organic_results = []
         serp_features = []
