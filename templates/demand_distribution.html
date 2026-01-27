@@ -193,6 +193,41 @@
 
         <!-- Results Section -->
         <div x-show="hasResults" x-cloak>
+            <!-- Executive Summary — 3 answers in 3 sentences -->
+            <div class="card p-5 mb-8 bg-gradient-to-r from-slate-900 to-slate-800 border-slate-700">
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <!-- Q1 answer -->
+                    <div class="flex items-start gap-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-blue-500 text-white text-xs font-bold flex-shrink-0 mt-0.5">1</span>
+                        <div>
+                            <p class="text-xs font-medium text-blue-300 uppercase tracking-wide">Where</p>
+                            <p class="text-sm text-white mt-0.5">
+                                <span class="font-bold" x-text="formatNumber(getTotalVolume())"></span> monthly volume across
+                                <span class="font-bold" x-text="(results?.platforms || []).filter(p => p.volume > 0).length"></span> platforms.
+                                <span x-text="results?.distribution_summary?.top_platform_name || '-'"></span> leads with
+                                <span x-text="getTopPlatformShare() + '%'"></span>.
+                            </p>
+                        </div>
+                    </div>
+                    <!-- Q2 answer -->
+                    <div class="flex items-start gap-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-indigo-500 text-white text-xs font-bold flex-shrink-0 mt-0.5">2</span>
+                        <div>
+                            <p class="text-xs font-medium text-indigo-300 uppercase tracking-wide">What drives it</p>
+                            <p class="text-sm text-white mt-0.5" x-text="getExecSummaryQ2()"></p>
+                        </div>
+                    </div>
+                    <!-- Q3 answer -->
+                    <div class="flex items-start gap-3">
+                        <span class="inline-flex items-center justify-center w-6 h-6 rounded-full bg-violet-500 text-white text-xs font-bold flex-shrink-0 mt-0.5">3</span>
+                        <div>
+                            <p class="text-xs font-medium text-violet-300 uppercase tracking-wide">Behavior</p>
+                            <p class="text-sm text-white mt-0.5" x-text="getExecSummaryQ3()"></p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Q1 Header: Where are users searching? -->
             <div class="mb-6">
                 <h2 class="text-lg font-bold text-slate-900">
@@ -337,267 +372,136 @@
                 </div>
             </div>
 
-            <!-- Insights & Recommendations -->
-            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-                <!-- Insights -->
-                <div class="card p-6">
-                    <h3 class="text-lg font-semibold text-slate-900 mb-4">Insights</h3>
-                    <div class="space-y-3">
-                        <template x-for="insight in results?.insights || []" :key="insight.title">
-                            <div
-                                class="insight-card p-4 rounded-xl border"
-                                :class="{
-                                    'bg-emerald-50 border-emerald-200': insight.type === 'opportunity',
-                                    'bg-blue-50 border-blue-200': insight.type === 'trend',
-                                    'bg-amber-50 border-amber-200': insight.type === 'ecommerce',
-                                    'bg-pink-50 border-pink-200': insight.type === 'social',
-                                    'bg-red-50 border-red-200': insight.type === 'visual'
-                                }"
-                            >
-                                <div class="flex items-start space-x-3">
+            <!-- Insights & Recommendations — Collapsible -->
+            <div class="card mb-6" x-data="{ showInsights: false }">
+                <button @click="showInsights = !showInsights" class="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition rounded-2xl">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-lightbulb text-amber-500"></i>
+                        <span class="font-semibold text-slate-900">Insights &amp; Recommendations</span>
+                        <span class="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full" x-text="((results?.insights || []).length + (results?.recommendations || []).length) + ' items'"></span>
+                    </div>
+                    <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': showInsights }"></i>
+                </button>
+                <div x-show="showInsights" x-collapse class="px-6 pb-6">
+                    <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        <!-- Insights -->
+                        <div>
+                            <h4 class="text-sm font-semibold text-slate-700 mb-3">Insights</h4>
+                            <div class="space-y-2">
+                                <template x-for="insight in results?.insights || []" :key="insight.title">
                                     <div
-                                        class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0"
+                                        class="p-3 rounded-xl border"
                                         :class="{
-                                            'bg-emerald-100': insight.type === 'opportunity',
-                                            'bg-blue-100': insight.type === 'trend',
-                                            'bg-amber-100': insight.type === 'ecommerce',
-                                            'bg-pink-100': insight.type === 'social',
-                                            'bg-red-100': insight.type === 'visual'
+                                            'bg-emerald-50 border-emerald-200': insight.type === 'opportunity',
+                                            'bg-blue-50 border-blue-200': insight.type === 'trend',
+                                            'bg-amber-50 border-amber-200': insight.type === 'ecommerce',
+                                            'bg-pink-50 border-pink-200': insight.type === 'social',
+                                            'bg-red-50 border-red-200': insight.type === 'visual'
                                         }"
                                     >
-                                        <i
-                                            :class="{
-                                                'fas fa-rocket text-emerald-600': insight.type === 'opportunity',
-                                                'fas fa-chart-line text-blue-600': insight.type === 'trend',
-                                                'fas fa-shopping-cart text-amber-600': insight.type === 'ecommerce',
-                                                'fas fa-hashtag text-pink-600': insight.type === 'social',
-                                                'fas fa-image text-red-600': insight.type === 'visual'
-                                            }"
-                                        ></i>
+                                        <p class="text-sm font-medium text-slate-900" x-text="insight.title"></p>
+                                        <p class="text-xs text-slate-600 mt-1" x-text="insight.description"></p>
                                     </div>
-                                    <div>
-                                        <p class="font-medium text-slate-900" x-text="insight.title"></p>
-                                        <p class="text-sm text-slate-600 mt-1" x-text="insight.description"></p>
-                                    </div>
-                                </div>
+                                </template>
                             </div>
-                        </template>
-                        <div x-show="!results?.insights?.length" class="text-slate-400 text-center py-8">
-                            No specific insights available.
                         </div>
-                    </div>
-                </div>
-
-                <!-- Recommendations -->
-                <div class="card p-6">
-                    <h3 class="text-lg font-semibold text-slate-900 mb-4">Recommendations</h3>
-                    <div class="space-y-4">
-                        <template x-for="(rec, index) in results?.recommendations || []" :key="rec.platform">
-                            <div class="p-4 bg-slate-50 rounded-xl">
-                                <div class="flex items-center space-x-3 mb-2">
-                                    <span class="w-6 h-6 bg-blue-600 text-white rounded-full flex items-center justify-center text-xs font-bold" x-text="index + 1"></span>
-                                    <span class="font-semibold text-slate-900" x-text="rec.action"></span>
-                                </div>
-                                <p class="text-sm text-slate-600 mb-3" x-text="rec.description"></p>
-                                <div class="flex flex-wrap gap-2">
-                                    <template x-for="tactic in rec.tactics" :key="tactic">
-                                        <span class="text-xs bg-white border border-slate-200 text-slate-600 px-2.5 py-1 rounded-full" x-text="tactic"></span>
-                                    </template>
-                                </div>
+                        <!-- Recommendations -->
+                        <div>
+                            <h4 class="text-sm font-semibold text-slate-700 mb-3">Recommendations</h4>
+                            <div class="space-y-2">
+                                <template x-for="(rec, index) in results?.recommendations || []" :key="rec.platform">
+                                    <div class="p-3 bg-slate-50 rounded-xl">
+                                        <div class="flex items-center space-x-2 mb-1">
+                                            <span class="w-5 h-5 bg-blue-600 text-white rounded-full flex items-center justify-center text-[10px] font-bold" x-text="index + 1"></span>
+                                            <span class="text-sm font-semibold text-slate-900" x-text="rec.action"></span>
+                                        </div>
+                                        <p class="text-xs text-slate-600 mb-2" x-text="rec.description"></p>
+                                        <div class="flex flex-wrap gap-1.5">
+                                            <template x-for="tactic in rec.tactics" :key="tactic">
+                                                <span class="text-[10px] bg-white border border-slate-200 text-slate-600 px-2 py-0.5 rounded-full" x-text="tactic"></span>
+                                            </template>
+                                        </div>
+                                    </div>
+                                </template>
                             </div>
-                        </template>
+                        </div>
                     </div>
                 </div>
             </div>
 
-            <!-- Keyword Details Table -->
-            <div class="card p-6">
-                <div class="flex items-center justify-between mb-4">
-                    <h3 class="text-lg font-semibold text-slate-900">Keyword Details</h3>
-                    <div class="flex space-x-2">
-                        <button @click="exportCSV()" class="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
-                            <i class="fas fa-download mr-1"></i> CSV
-                        </button>
-                        <button @click="copyToClipboard()" class="px-3 py-1.5 text-xs font-medium text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
-                            <i class="fas fa-copy mr-1"></i> Copy
-                        </button>
+            <!-- Keyword Details — Expandable -->
+            <div class="card mb-6" x-data="{ showDetails: false }">
+                <button @click="showDetails = !showDetails" class="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition rounded-2xl">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-table text-slate-500"></i>
+                        <span class="font-semibold text-slate-900">Keyword Details</span>
+                        <span class="text-xs px-2 py-0.5 bg-slate-100 text-slate-600 rounded-full" x-text="Object.keys(results?.keyword_details || {}).length + ' keywords'"></span>
                     </div>
-                </div>
-                <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
-                        <thead>
-                            <tr class="text-left border-b border-slate-200">
-                                <th class="pb-3 pr-4 font-semibold text-slate-500">Keyword</th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Monthly search volume">
-                                    <i class="fab fa-google text-blue-500 mr-1"></i>Google
-                                </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Monthly search volume">
-                                    <i class="fab fa-youtube text-red-500 mr-1"></i>YouTube
-                                </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Monthly search volume">
-                                    <i class="fab fa-amazon text-orange-500 mr-1"></i>Amazon
-                                </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Avg. interactions per video">
-                                    <i class="fab fa-tiktok text-slate-700 mr-1"></i>TikTok
-                                </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Avg. interactions per post">
-                                    <i class="fab fa-instagram text-pink-500 mr-1"></i>Instagram
-                                </th>
-                                <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Interest Index (0-100)">
-                                    <i class="fab fa-pinterest text-red-600 mr-1"></i>Pinterest
-                                </th>
-                                <th class="pb-3 pl-3 text-center font-semibold text-slate-500">Best</th>
-                            </tr>
-                        </thead>
-                        <tbody>
-                            <template x-for="(data, keyword) in results?.keyword_details || {}" :key="keyword">
-                                <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
-                                    <td class="py-3 pr-4 font-medium text-slate-900" x-text="keyword"></td>
-                                    <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.google?.volume || 0)"></td>
-                                    <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.youtube?.volume || 0)"></td>
-                                    <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.amazon?.volume || 0)"></td>
-                                    <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.tiktok?.volume || 0)"></td>
-                                    <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.instagram?.volume || 0)"></td>
-                                    <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.pinterest?.volume || 0)"></td>
-                                    <td class="py-3 pl-3 text-center">
-                                        <span
-                                            class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
-                                            :class="{
-                                                'bg-blue-100 text-blue-700': data.best_platform === 'google',
-                                                'bg-red-100 text-red-700': data.best_platform === 'youtube',
-                                                'bg-orange-100 text-orange-700': data.best_platform === 'amazon',
-                                                'bg-slate-100 text-slate-700': data.best_platform === 'tiktok',
-                                                'bg-pink-100 text-pink-700': data.best_platform === 'instagram',
-                                                'bg-red-100 text-red-600': data.best_platform === 'pinterest'
-                                            }"
-                                            x-text="data.best_platform || '-'"
-                                        ></span>
-                                    </td>
+                    <div class="flex items-center gap-2">
+                        <button @click.stop="exportCSV()" class="px-2 py-1 text-[10px] font-medium text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
+                            <i class="fas fa-download mr-0.5"></i> CSV
+                        </button>
+                        <button @click.stop="copyToClipboard()" class="px-2 py-1 text-[10px] font-medium text-slate-500 bg-slate-100 hover:bg-slate-200 rounded-lg transition">
+                            <i class="fas fa-copy mr-0.5"></i> Copy
+                        </button>
+                        <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': showDetails }"></i>
+                    </div>
+                </button>
+                <div x-show="showDetails" x-collapse class="px-6 pb-6">
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-sm">
+                            <thead>
+                                <tr class="text-left border-b border-slate-200">
+                                    <th class="pb-3 pr-4 font-semibold text-slate-500">Keyword</th>
+                                    <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Monthly search volume">
+                                        <i class="fab fa-google text-blue-500 mr-1"></i>Google
+                                    </th>
+                                    <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Monthly search volume">
+                                        <i class="fab fa-youtube text-red-500 mr-1"></i>YouTube
+                                    </th>
+                                    <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Monthly search volume">
+                                        <i class="fab fa-amazon text-orange-500 mr-1"></i>Amazon
+                                    </th>
+                                    <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Avg. interactions per video">
+                                        <i class="fab fa-tiktok text-slate-700 mr-1"></i>TikTok
+                                    </th>
+                                    <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Avg. interactions per post">
+                                        <i class="fab fa-instagram text-pink-500 mr-1"></i>Instagram
+                                    </th>
+                                    <th class="pb-3 px-3 text-right font-semibold text-slate-500" title="Interest Index (0-100)">
+                                        <i class="fab fa-pinterest text-red-600 mr-1"></i>Pinterest
+                                    </th>
+                                    <th class="pb-3 pl-3 text-center font-semibold text-slate-500">Best</th>
                                 </tr>
-                            </template>
-                        </tbody>
-                    </table>
-                </div>
-
-            </div>
-
-            <!-- FAQ Section -->
-            <div class="card p-6 mt-6" x-data="{ openFaq: null }">
-                <h3 class="text-lg font-semibold text-slate-900 mb-4">
-                    <i class="fas fa-question-circle text-blue-500 mr-2"></i>
-                    Frequently Asked Questions
-                </h3>
-                <div class="space-y-3">
-                    <!-- FAQ 1 -->
-                    <div class="border border-slate-200 rounded-lg overflow-hidden">
-                        <button @click="openFaq = openFaq === 1 ? null : 1" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">What is Total Search?</span>
-                            <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 1 }"></i>
-                        </button>
-                        <div x-show="openFaq === 1" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>Total Search is a cross-platform search intelligence tool. It measures how much search demand exists for a brand or keyword across 6 major platforms: Google, YouTube, Amazon, TikTok, Instagram, and Pinterest.</p>
-                            <p class="mt-2">Each platform reveals demand through a different signal &mdash; search queries on Google, video engagement on TikTok, visual discovery on Pinterest. Total Search brings these signals together into one unified view so brands can see where their audience is and where opportunities exist.</p>
-                        </div>
-                    </div>
-                    <!-- FAQ 2 -->
-                    <div class="border border-slate-200 rounded-lg overflow-hidden">
-                        <button @click="openFaq = openFaq === 2 ? null : 2" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">How is the volume share calculated?</span>
-                            <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 2 }"></i>
-                        </button>
-                        <div x-show="openFaq === 2" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>The volume share pie chart shows each platform's percentage of total search volume. It works by:</p>
-                            <ol class="mt-2 ml-4 list-decimal space-y-1">
-                                <li><strong>Summing</strong> raw metrics from all platforms (search volume, engagement, interest index)</li>
-                                <li><strong>Calculating share</strong> as each platform's volume divided by the total, expressed as a percentage</li>
-                                <li><strong>Displaying</strong> both the raw volume and the percentage share for each platform</li>
-                            </ol>
-                            <p class="mt-2">This tells you where your audience actually searches. A platform with 60%+ share is the dominant channel for your keywords.</p>
-                        </div>
-                    </div>
-                    <!-- FAQ 3 -->
-                    <div class="border border-slate-200 rounded-lg overflow-hidden">
-                        <button @click="openFaq = openFaq === 3 ? null : 3" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">How is demand measured on each platform?</span>
-                            <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 3 }"></i>
-                        </button>
-                        <div x-show="openFaq === 3" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>Each platform uses the best available proxy metric for demand:</p>
-                            <div class="mt-2 space-y-2">
-                                <div class="flex items-start space-x-2">
-                                    <span class="w-2 h-2 bg-green-500 rounded-full mt-1.5 flex-shrink-0"></span>
-                                    <span><strong>Google, YouTube, Amazon</strong> &mdash; Monthly search volume. People actively searching for a keyword signals direct demand. Source: DataForSEO API.</span>
-                                </div>
-                                <div class="flex items-start space-x-2">
-                                    <span class="w-2 h-2 bg-amber-500 rounded-full mt-1.5 flex-shrink-0"></span>
-                                    <span><strong>TikTok, Instagram</strong> &mdash; Average interactions per post/video. We take the higher of avg. likes vs avg. comments (to avoid double-counting, since one person can like AND comment). Each interaction represents approximately one interested person. Source: Apify scrapers.</span>
-                                </div>
-                                <div class="flex items-start space-x-2">
-                                    <span class="w-2 h-2 bg-purple-500 rounded-full mt-1.5 flex-shrink-0"></span>
-                                    <span><strong>Pinterest</strong> &mdash; Interest Index (0-100). A relative popularity score from Pinterest Trends where 100 = peak interest. Source: Pinterest Trends API.</span>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <!-- FAQ 4 -->
-                    <div class="border border-slate-200 rounded-lg overflow-hidden">
-                        <button @click="openFaq = openFaq === 4 ? null : 4" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">Why normalize to 0-100?</span>
-                            <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 4 }"></i>
-                        </button>
-                        <div x-show="openFaq === 4" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>Different platforms measure demand in completely different units: Google reports monthly search queries (thousands to millions), TikTok reports average likes per video (hundreds to hundreds of thousands), and Pinterest uses a 0-100 index.</p>
-                            <p class="mt-2">The pie chart and platform bars show raw volume numbers so you can see exactly how much activity each platform generates. The percentage shares tell you where your audience actually lives.</p>
-                            <p class="mt-2">Behind the scenes, logarithmic normalization converts each metric to a common 0-100 scale for internal scoring and ranking. But the primary view always shows real volume numbers.</p>
-                        </div>
-                    </div>
-                    <!-- FAQ 5 -->
-                    <div class="border border-slate-200 rounded-lg overflow-hidden">
-                        <button @click="openFaq = openFaq === 5 ? null : 5" class="w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 transition">
-                            <span class="font-medium text-slate-800">What do the Audience Profiles and platform weights mean?</span>
-                            <i class="fas fa-chevron-down text-slate-400 transition-transform duration-200" :class="{ 'rotate-180': openFaq === 5 }"></i>
-                        </button>
-                        <div x-show="openFaq === 5" x-collapse class="px-4 pb-4 text-sm text-slate-600">
-                            <p>Different audiences use platforms differently. The Audience Profile adjusts how platforms are ranked and prioritized in insights. Each profile is calibrated using industry research data:</p>
-
-                            <div class="mt-3 space-y-3">
-                                <div class="bg-slate-50 rounded-lg p-3">
-                                    <p class="font-semibold text-slate-700">General (default)</p>
-                                    <p class="text-xs text-slate-500 mt-0.5">Google 30% &middot; Amazon 22% &middot; YouTube 15% &middot; Instagram 14% &middot; TikTok 11% &middot; Pinterest 8%</p>
-                                    <p class="text-xs text-slate-400 mt-1">Average adult, cross-industry. Based on NP Digital 2025 daily search volume data &amp; Jungle Scout product search studies.</p>
-                                </div>
-                                <div class="bg-slate-50 rounded-lg p-3">
-                                    <p class="font-semibold text-slate-700">E-commerce</p>
-                                    <p class="text-xs text-slate-500 mt-0.5">Amazon 32% &middot; Google 25% &middot; Pinterest 14% &middot; Instagram 12% &middot; YouTube 10% &middot; TikTok 7%</p>
-                                    <p class="text-xs text-slate-400 mt-1">Purchase-focused brands. Amazon: 56-74% of product searches start here (Jungle Scout 2025). Pinterest: 96% of searches are unbranded.</p>
-                                </div>
-                                <div class="bg-slate-50 rounded-lg p-3">
-                                    <p class="font-semibold text-slate-700">Beauty &amp; Lifestyle</p>
-                                    <p class="text-xs text-slate-500 mt-0.5">TikTok 25% &middot; Instagram 22% &middot; Google 18% &middot; Amazon 15% &middot; Pinterest 12% &middot; YouTube 8%</p>
-                                    <p class="text-xs text-slate-400 mt-1">Beauty, fashion, food, home. 80% of TikTok Shop US sales are beauty (McKinsey 2025). 70% of shoppers discover next purchase on Instagram.</p>
-                                </div>
-                                <div class="bg-slate-50 rounded-lg p-3">
-                                    <p class="font-semibold text-slate-700">Gen Z Audience</p>
-                                    <p class="text-xs text-slate-500 mt-0.5">TikTok 26% &middot; Instagram 22% &middot; YouTube 18% &middot; Google 18% &middot; Pinterest 8% &middot; Amazon 8%</p>
-                                    <p class="text-xs text-slate-400 mt-1">Ages 16-27. 64% of Gen Z use TikTok as a search engine (Adobe 2024). Google usage down 25% vs Gen X (Claneo State of Search 2025).</p>
-                                </div>
-                                <div class="bg-slate-50 rounded-lg p-3">
-                                    <p class="font-semibold text-slate-700">B2B / Technology</p>
-                                    <p class="text-xs text-slate-500 mt-0.5">Google 40% &middot; YouTube 22% &middot; Amazon 18% &middot; Instagram 8% &middot; TikTok 7% &middot; Pinterest 5%</p>
-                                    <p class="text-xs text-slate-400 mt-1">Tech, SaaS, professional services. Google dominates informational/professional search. YouTube critical for reviews and tutorials.</p>
-                                </div>
-                                <div class="bg-slate-50 rounded-lg p-3">
-                                    <p class="font-semibold text-slate-700">Video &amp; Content</p>
-                                    <p class="text-xs text-slate-500 mt-0.5">YouTube 30% &middot; TikTok 25% &middot; Instagram 18% &middot; Google 15% &middot; Pinterest 7% &middot; Amazon 5%</p>
-                                    <p class="text-xs text-slate-400 mt-1">Entertainment, education, creators. YouTube is the 2nd largest search engine. TikTok is the fastest-growing content discovery platform.</p>
-                                </div>
-                            </div>
-
-                            <p class="mt-3 text-xs text-slate-400">
-                                <strong>Data sources:</strong> NP Digital Web Summit 2025, Jungle Scout Consumer Trends 2025, Claneo State of Search 2025, SparkToro/Datos Q2 2025, McKinsey State of Beauty 2025, Adobe Gen Z Search Study 2024. Weights are re-calibrated periodically as platform usage evolves.
-                            </p>
-                            <p class="mt-2">If a platform returns zero data, its weight is redistributed among the remaining platforms.</p>
-                        </div>
+                            </thead>
+                            <tbody>
+                                <template x-for="(data, keyword) in results?.keyword_details || {}" :key="keyword">
+                                    <tr class="border-b border-slate-100 hover:bg-slate-50 transition">
+                                        <td class="py-3 pr-4 font-medium text-slate-900" x-text="keyword"></td>
+                                        <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.google?.volume || 0)"></td>
+                                        <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.youtube?.volume || 0)"></td>
+                                        <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.amazon?.volume || 0)"></td>
+                                        <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.tiktok?.volume || 0)"></td>
+                                        <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.instagram?.volume || 0)"></td>
+                                        <td class="py-3 px-3 text-right text-slate-600" x-text="formatNumber(data.platforms?.pinterest?.volume || 0)"></td>
+                                        <td class="py-3 pl-3 text-center">
+                                            <span
+                                                class="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium"
+                                                :class="{
+                                                    'bg-blue-100 text-blue-700': data.best_platform === 'google',
+                                                    'bg-red-100 text-red-700': data.best_platform === 'youtube',
+                                                    'bg-orange-100 text-orange-700': data.best_platform === 'amazon',
+                                                    'bg-slate-100 text-slate-700': data.best_platform === 'tiktok',
+                                                    'bg-pink-100 text-pink-700': data.best_platform === 'instagram',
+                                                    'bg-red-100 text-red-600': data.best_platform === 'pinterest'
+                                                }"
+                                                x-text="data.best_platform || '-'"
+                                            ></span>
+                                        </td>
+                                    </tr>
+                                </template>
+                            </tbody>
+                        </table>
                     </div>
                 </div>
             </div>
@@ -982,35 +886,6 @@
                 </div>
             </div>
 
-            <!-- Opportunities Panel -->
-            <div class="card p-6 mt-6 bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200" x-show="getOpportunities().length > 0">
-                <h3 class="text-lg font-semibold text-slate-900 mb-4">
-                    <i class="fas fa-lightbulb text-emerald-500 mr-2"></i>Opportunities Detected
-                </h3>
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <template x-for="opp in getOpportunities()" :key="opp.title">
-                        <div class="p-4 bg-white/70 rounded-xl border border-emerald-200">
-                            <div class="flex items-start space-x-3">
-                                <div class="w-8 h-8 rounded-lg flex items-center justify-center flex-shrink-0" :class="opp.iconBg">
-                                    <i :class="opp.icon" class="text-sm"></i>
-                                </div>
-                                <div>
-                                    <p class="text-sm font-semibold text-slate-800" x-text="opp.title"></p>
-                                    <p class="text-xs text-slate-600 mt-1" x-text="opp.description"></p>
-                                    <span class="inline-block mt-2 text-[10px] font-medium px-2 py-0.5 rounded-full"
-                                        :class="{
-                                            'bg-red-100 text-red-700': opp.priority === 'high',
-                                            'bg-amber-100 text-amber-700': opp.priority === 'medium',
-                                            'bg-slate-100 text-slate-600': opp.priority === 'low'
-                                        }"
-                                        x-text="opp.priority + ' priority'"></span>
-                                </div>
-                            </div>
-                        </div>
-                    </template>
-                </div>
-            </div>
-
             <!-- Q3: What can we learn from search behavior? -->
             <div class="mt-8 mb-6">
                 <h2 class="text-lg font-bold text-slate-900">
@@ -1174,6 +1049,55 @@
                 </div>
             </div>
 
+            <!-- FAQ — collapsed at bottom -->
+            <div class="card mt-8" x-data="{ openFaq: null, showFaq: false }">
+                <button @click="showFaq = !showFaq" class="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition rounded-2xl">
+                    <div class="flex items-center gap-3">
+                        <i class="fas fa-question-circle text-slate-400"></i>
+                        <span class="text-sm font-medium text-slate-500">Methodology &amp; FAQ</span>
+                    </div>
+                    <i class="fas fa-chevron-down text-slate-300 transition-transform duration-200" :class="{ 'rotate-180': showFaq }"></i>
+                </button>
+                <div x-show="showFaq" x-collapse class="px-6 pb-6 space-y-2">
+                    <div class="border border-slate-200 rounded-lg overflow-hidden">
+                        <button @click="openFaq = openFaq === 1 ? null : 1" class="w-full flex items-center justify-between p-3 text-left hover:bg-slate-50 transition">
+                            <span class="text-sm font-medium text-slate-700">What is Total Search?</span>
+                            <i class="fas fa-chevron-down text-slate-400 text-xs transition-transform duration-200" :class="{ 'rotate-180': openFaq === 1 }"></i>
+                        </button>
+                        <div x-show="openFaq === 1" x-collapse class="px-3 pb-3 text-xs text-slate-600">
+                            <p>Total Search measures search demand across 6 platforms: Google, YouTube, Amazon, TikTok, Instagram, and Pinterest. Each platform reveals demand through a different signal — search queries, video engagement, visual discovery.</p>
+                        </div>
+                    </div>
+                    <div class="border border-slate-200 rounded-lg overflow-hidden">
+                        <button @click="openFaq = openFaq === 2 ? null : 2" class="w-full flex items-center justify-between p-3 text-left hover:bg-slate-50 transition">
+                            <span class="text-sm font-medium text-slate-700">How is volume share calculated?</span>
+                            <i class="fas fa-chevron-down text-slate-400 text-xs transition-transform duration-200" :class="{ 'rotate-180': openFaq === 2 }"></i>
+                        </button>
+                        <div x-show="openFaq === 2" x-collapse class="px-3 pb-3 text-xs text-slate-600">
+                            <p>Each platform's raw volume is divided by the total across all platforms. A platform with 60%+ share is the dominant channel.</p>
+                        </div>
+                    </div>
+                    <div class="border border-slate-200 rounded-lg overflow-hidden">
+                        <button @click="openFaq = openFaq === 3 ? null : 3" class="w-full flex items-center justify-between p-3 text-left hover:bg-slate-50 transition">
+                            <span class="text-sm font-medium text-slate-700">How is demand measured on each platform?</span>
+                            <i class="fas fa-chevron-down text-slate-400 text-xs transition-transform duration-200" :class="{ 'rotate-180': openFaq === 3 }"></i>
+                        </button>
+                        <div x-show="openFaq === 3" x-collapse class="px-3 pb-3 text-xs text-slate-600">
+                            <p><strong>Google, YouTube, Amazon</strong> — monthly search volume (DataForSEO). <strong>TikTok, Instagram</strong> — avg. interactions per post (Apify). <strong>Pinterest</strong> — interest index 0-100 (Pinterest Trends).</p>
+                        </div>
+                    </div>
+                    <div class="border border-slate-200 rounded-lg overflow-hidden">
+                        <button @click="openFaq = openFaq === 4 ? null : 4" class="w-full flex items-center justify-between p-3 text-left hover:bg-slate-50 transition">
+                            <span class="text-sm font-medium text-slate-700">What do Audience Profiles do?</span>
+                            <i class="fas fa-chevron-down text-slate-400 text-xs transition-transform duration-200" :class="{ 'rotate-180': openFaq === 4 }"></i>
+                        </button>
+                        <div x-show="openFaq === 4" x-collapse class="px-3 pb-3 text-xs text-slate-600">
+                            <p>Audience Profiles adjust how platforms are ranked in insights. For example, "E-commerce" weights Amazon higher. Profiles are calibrated using NP Digital, Jungle Scout, McKinsey, and Adobe research data.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
         </div>
 
         <!-- Empty State -->
@@ -1287,13 +1211,47 @@
                     return (youtube?.volume === 0) || (amazon?.volume === 0);
                 },
 
+                getExecSummaryQ2() {
+                    if (!this.trendsData && !this.landscapeData) return 'Loading trend and landscape data...';
+                    const parts = [];
+                    if (this.trendsData?.seasonality?.seasonality_strength === 'high') {
+                        parts.push('Seasonal peak in ' + this.trendsData.seasonality.peak_month + '.');
+                    } else if (this.trendsData?.overall_trend) {
+                        parts.push('Trend is ' + this.trendsData.overall_trend + '.');
+                    }
+                    if (this.landscapeData?.brand && this.landscapeData?.brand_position) {
+                        parts.push(this.landscapeData.brand + ' ranks #' + this.landscapeData.brand_position + ' in Google.');
+                    } else if (this.landscapeData?.brand && !this.landscapeData?.brand_position) {
+                        parts.push(this.landscapeData.brand + ' not found in top 20 Google results.');
+                    }
+                    const rising = (this.trendsData?.rising_queries || []).filter(q => q.value === 'Breakout').length;
+                    if (rising > 0) parts.push(rising + ' breakout queries detected.');
+                    return parts.length ? parts.join(' ') : 'Trend and competitive data loading...';
+                },
+
+                getExecSummaryQ3() {
+                    if (!this.behavioralData) return 'Loading behavioral analysis...';
+                    const parts = [];
+                    const funnel = this.behavioralData?.funnel_analysis?.stages || [];
+                    const dominant = funnel.reduce((max, s) => s.percentage > (max?.percentage || 0) ? s : max, null);
+                    if (dominant) {
+                        parts.push(dominant.percentage + '% of searches are ' + dominant.stage + '-stage.');
+                    }
+                    const sos = this.behavioralData?.share_of_search?.brands?.[0];
+                    if (sos) {
+                        parts.push(sos.brand + ' leads share of search at ' + sos.share_percentage.toFixed(1) + '%.');
+                    }
+                    return parts.length ? parts.join(' ') : 'Behavioral data loading...';
+                },
+
                 async analyzeKeywords() {
                     if (!this.searchQuery.trim()) return;
 
                     this.isLoading = true;
                     this.results = null;
-                    this.trendsData = null;  // Reset trends data for new search
-                    this.landscapeData = null;  // Reset landscape for new search
+                    this.trendsData = null;
+                    this.landscapeData = null;
+                    this.behavioralData = null;
 
                     try {
                         const params = new URLSearchParams({
@@ -1314,8 +1272,12 @@
                             this.$nextTick(() => {
                                 requestAnimationFrame(() => this.renderChart());
                             });
-                            // Auto-load cross-platform trends after main analysis
-                            this.$nextTick(() => this.loadTrendsIntelligence());
+                            // Auto-load Q2 (trends + landscape) and Q3 (behavioral) after main analysis
+                            this.$nextTick(() => {
+                                this.loadTrendsIntelligence();
+                                this.loadSearchLandscape();
+                                this.loadBehavioralAnalysis();
+                            });
                         } else {
                             alert('Error: ' + (data.detail || 'Analysis failed'));
                         }
