@@ -507,16 +507,14 @@
             </div>
 
             <!-- Q2: What is driving search interest? -->
-            <div class="mt-8 mb-6">
-                <h2 class="text-lg font-bold text-slate-900">
-                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-indigo-600 text-white text-sm font-bold mr-2">2</span>
-                    What is driving search interest?
-                </h2>
-                <p class="text-sm text-slate-500 mt-1 ml-9">Trend momentum, seasonality, geographic hotspots, and emerging queries</p>
-            </div>
-
-            <!-- Cross-Platform Trends Intelligence Section -->
-            <div class="card p-6" x-show="hasResults">
+            <div class="card p-6 mt-8" x-show="hasResults">
+                <div class="mb-6">
+                    <h2 class="text-lg font-bold text-slate-900">
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-indigo-600 text-white text-sm font-bold mr-2">2</span>
+                        What is driving search interest?
+                    </h2>
+                    <p class="text-sm text-slate-500 mt-1 ml-9">Trend momentum, seasonality, geographic hotspots, and emerging queries</p>
+                </div>
                 <div class="flex items-center justify-between mb-6">
                     <div>
                         <h3 class="text-lg font-semibold text-slate-900">
@@ -887,16 +885,14 @@
             </div>
 
             <!-- Q3: What can we learn from search behavior? -->
-            <div class="mt-8 mb-6">
-                <h2 class="text-lg font-bold text-slate-900">
-                    <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-violet-600 text-white text-sm font-bold mr-2">3</span>
-                    What can we learn from search behavior?
-                </h2>
-                <p class="text-sm text-slate-500 mt-1 ml-9">Funnel stage analysis, share of search, and behavioral modifier signals</p>
-            </div>
-
-            <!-- Behavioral Intelligence Section -->
-            <div class="card p-6" x-show="hasResults">
+            <div class="card p-6 mt-8" x-show="hasResults">
+                <div class="mb-6">
+                    <h2 class="text-lg font-bold text-slate-900">
+                        <span class="inline-flex items-center justify-center w-7 h-7 rounded-full bg-violet-600 text-white text-sm font-bold mr-2">3</span>
+                        What can we learn from search behavior?
+                    </h2>
+                    <p class="text-sm text-slate-500 mt-1 ml-9">Funnel stage analysis, share of search, and behavioral modifier signals</p>
+                </div>
                 <div class="flex items-center justify-between mb-4">
                     <h3 class="text-lg font-semibold text-slate-900">
                         <i class="fas fa-brain text-violet-500 mr-2"></i>Search Behavior Insights
@@ -1050,7 +1046,7 @@
             </div>
 
             <!-- FAQ — collapsed at bottom -->
-            <div class="card mt-8" x-data="{ openFaq: null, showFaq: false }">
+            <div class="card mt-8" x-show="hasResults" x-data="{ openFaq: null, showFaq: false }">
                 <button @click="showFaq = !showFaq" class="w-full p-4 flex items-center justify-between text-left hover:bg-slate-50 transition rounded-2xl">
                     <div class="flex items-center gap-3">
                         <i class="fas fa-question-circle text-slate-400"></i>
