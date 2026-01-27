@@ -791,6 +791,197 @@
                 </div>
             </div>
 
+            <!-- Search Landscape Section -->
+            <div class="card p-6 mt-6" x-show="hasResults">
+                <div class="flex items-center justify-between mb-4">
+                    <div>
+                        <h3 class="text-lg font-semibold text-slate-900">
+                            <i class="fas fa-globe-americas text-indigo-500 mr-2"></i>Search Landscape
+                        </h3>
+                        <p class="text-sm text-slate-500 mt-1">Who owns the search results? Live Google SERP analysis.</p>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <input
+                            type="text"
+                            x-model="landscapeBrand"
+                            placeholder="Brand name (optional)"
+                            class="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 w-40"
+                        >
+                        <button
+                            @click="loadSearchLandscape()"
+                            :disabled="landscapeLoading"
+                            class="px-3 py-1.5 text-xs font-medium rounded-lg bg-indigo-600 text-white hover:bg-indigo-700 disabled:opacity-50 transition-all"
+                        >
+                            <i :class="landscapeLoading ? 'fas fa-circle-notch fa-spin' : 'fas fa-search'" class="mr-1"></i>
+                            <span x-text="landscapeLoading ? 'Scanning...' : (landscapeData ? 'Refresh' : 'Scan SERP')"></span>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Loading State -->
+                <div x-show="landscapeLoading" class="text-center py-8">
+                    <i class="fas fa-circle-notch fa-spin text-3xl text-indigo-400 mb-3"></i>
+                    <p class="text-sm text-slate-500">Scanning live Google results...</p>
+                </div>
+
+                <!-- Results -->
+                <div x-show="landscapeData && !landscapeLoading">
+
+                    <!-- Brand Position Alert -->
+                    <div x-show="landscapeData?.brand" class="mb-4">
+                        <div class="p-4 rounded-xl border"
+                            :class="{
+                                'bg-green-50 border-green-200': landscapeData?.brand_position && landscapeData?.brand_position <= 3,
+                                'bg-amber-50 border-amber-200': landscapeData?.brand_position && landscapeData?.brand_position > 3 && landscapeData?.brand_position <= 10,
+                                'bg-red-50 border-red-200': !landscapeData?.brand_position || landscapeData?.brand_position > 10
+                            }">
+                            <div class="flex items-center gap-3">
+                                <div class="w-10 h-10 rounded-xl flex items-center justify-center font-bold text-lg"
+                                    :class="{
+                                        'bg-green-200 text-green-800': landscapeData?.brand_position && landscapeData?.brand_position <= 3,
+                                        'bg-amber-200 text-amber-800': landscapeData?.brand_position && landscapeData?.brand_position > 3 && landscapeData?.brand_position <= 10,
+                                        'bg-red-200 text-red-800': !landscapeData?.brand_position || landscapeData?.brand_position > 10
+                                    }"
+                                    x-text="landscapeData?.brand_position ? '#' + landscapeData.brand_position : '—'">
+                                </div>
+                                <div>
+                                    <p class="font-semibold text-slate-900" x-text="landscapeData?.brand_position ? landscapeData.brand + ' ranks #' + landscapeData.brand_position + ' for \"' + landscapeData.keyword + '\"' : landscapeData.brand + ' not found in top 20 for \"' + landscapeData.keyword + '\"'"></p>
+                                    <p class="text-xs text-slate-500 mt-0.5" x-text="landscapeData?.brand_position <= 3 ? 'Strong visibility — top 3 captures ~60% of clicks' : (landscapeData?.brand_position <= 10 ? 'Page 1 but below top 3 — losing clicks to competitors above' : 'Major visibility gap — your brand is invisible for this search')"></p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <!-- Top Domains -->
+                        <div class="lg:col-span-2">
+                            <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                                <i class="fas fa-list-ol mr-1 text-indigo-500"></i> Top Ranking Domains
+                            </h4>
+                            <div class="space-y-1.5">
+                                <template x-for="result in (landscapeData?.organic_results || [])" :key="result.position">
+                                    <div class="flex items-center gap-3 p-2 rounded-lg transition"
+                                        :class="result.is_brand ? 'bg-blue-50 border border-blue-200' : 'hover:bg-slate-50'">
+                                        <span class="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold flex-shrink-0"
+                                            :class="{
+                                                'bg-yellow-200 text-yellow-800': result.position <= 3,
+                                                'bg-slate-200 text-slate-600': result.position > 3
+                                            }"
+                                            x-text="result.position">
+                                        </span>
+                                        <div class="flex-1 min-w-0">
+                                            <div class="flex items-center gap-2">
+                                                <span class="text-sm font-medium text-slate-800 truncate" x-text="result.domain"></span>
+                                                <span class="text-[9px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0"
+                                                    :class="{
+                                                        'bg-blue-100 text-blue-700': result.type === 'brand',
+                                                        'bg-orange-100 text-orange-700': result.type === 'marketplace',
+                                                        'bg-purple-100 text-purple-700': result.type === 'content',
+                                                        'bg-green-100 text-green-700': result.type === 'retailer',
+                                                        'bg-pink-100 text-pink-700': result.type === 'social'
+                                                    }"
+                                                    x-text="result.type">
+                                                </span>
+                                                <span x-show="result.is_brand" class="text-[9px] px-1.5 py-0.5 rounded-full bg-blue-600 text-white font-bold flex-shrink-0">YOUR BRAND</span>
+                                            </div>
+                                            <p class="text-[11px] text-slate-400 truncate" x-text="result.title"></p>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+
+                        <!-- Right Column: Type Breakdown + People Also Ask -->
+                        <div>
+                            <!-- SERP Composition -->
+                            <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                                <i class="fas fa-chart-pie mr-1 text-indigo-500"></i> SERP Composition
+                            </h4>
+                            <div class="space-y-2 mb-6">
+                                <template x-for="tb in (landscapeData?.type_breakdown || [])" :key="tb.type">
+                                    <div>
+                                        <div class="flex justify-between text-xs mb-1">
+                                            <span class="font-medium text-slate-600" x-text="tb.label"></span>
+                                            <span class="text-slate-500" x-text="tb.count + ' (' + tb.percentage + '%)'"></span>
+                                        </div>
+                                        <div class="h-2 bg-slate-100 rounded-full overflow-hidden">
+                                            <div class="h-full rounded-full"
+                                                :class="{
+                                                    'bg-blue-500': tb.type === 'brand',
+                                                    'bg-orange-500': tb.type === 'marketplace',
+                                                    'bg-purple-500': tb.type === 'content',
+                                                    'bg-green-500': tb.type === 'retailer',
+                                                    'bg-pink-500': tb.type === 'social'
+                                                }"
+                                                :style="'width: ' + Math.max(tb.percentage, 3) + '%'">
+                                            </div>
+                                        </div>
+                                    </div>
+                                </template>
+                            </div>
+
+                            <!-- People Also Ask -->
+                            <div x-show="landscapeData?.people_also_ask?.length">
+                                <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                                    <i class="fas fa-question-circle mr-1 text-amber-500"></i> People Also Ask
+                                </h4>
+                                <div class="space-y-1.5">
+                                    <template x-for="paa in (landscapeData?.people_also_ask || [])" :key="paa.question">
+                                        <div class="p-2 bg-slate-50 rounded-lg">
+                                            <p class="text-xs text-slate-700" x-text="paa.question"></p>
+                                            <p class="text-[10px] text-slate-400 mt-0.5" x-text="paa.domain"></p>
+                                        </div>
+                                    </template>
+                                </div>
+                            </div>
+
+                            <!-- SERP Features -->
+                            <div x-show="landscapeData?.serp_features?.length" class="mt-4">
+                                <h4 class="text-sm font-semibold text-slate-700 mb-2">
+                                    <i class="fas fa-star mr-1 text-yellow-500"></i> SERP Features
+                                </h4>
+                                <div class="flex flex-wrap gap-1.5">
+                                    <template x-for="sf in (landscapeData?.serp_features || [])" :key="sf.type + (sf.domain || '')">
+                                        <span class="text-[10px] px-2 py-1 rounded-full bg-yellow-50 border border-yellow-200 text-yellow-700"
+                                            x-text="sf.type.replace('_', ' ')">
+                                        </span>
+                                    </template>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Landscape Insights -->
+                    <div x-show="landscapeData?.insights?.length" class="mt-4 pt-4 border-t border-slate-200">
+                        <h4 class="text-sm font-semibold text-slate-700 mb-3">
+                            <i class="fas fa-lightbulb mr-1 text-amber-500"></i> Landscape Insights
+                        </h4>
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-2">
+                            <template x-for="insight in (landscapeData?.insights || [])" :key="insight.title">
+                                <div class="p-3 rounded-xl border"
+                                    :class="{
+                                        'bg-green-50 border-green-200': insight.type === 'positive',
+                                        'bg-amber-50 border-amber-200': insight.type === 'warning',
+                                        'bg-red-50 border-red-200': insight.type === 'negative',
+                                        'bg-blue-50 border-blue-200': insight.type === 'info',
+                                        'bg-emerald-50 border-emerald-200': insight.type === 'opportunity'
+                                    }">
+                                    <p class="text-xs font-semibold text-slate-800" x-text="insight.title"></p>
+                                    <p class="text-[11px] text-slate-600 mt-1" x-text="insight.description"></p>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Empty State -->
+                <div x-show="!landscapeData && !landscapeLoading" class="text-center py-6">
+                    <i class="fas fa-globe-americas text-3xl text-slate-300 mb-2"></i>
+                    <p class="text-sm text-slate-400">Click "Scan SERP" to see who owns the search results for your keyword.</p>
+                    <p class="text-xs text-slate-300 mt-1">Enter a brand name to check if it appears in the results.</p>
+                </div>
+            </div>
+
             <!-- Opportunities Panel -->
             <div class="card p-6 mt-6 bg-gradient-to-br from-emerald-50 to-teal-50 border-emerald-200" x-show="getOpportunities().length > 0">
                 <h3 class="text-lg font-semibold text-slate-900 mb-4">
@@ -1036,6 +1227,9 @@
                 trendsChart: null,
                 behavioralData: null,
                 behavioralLoading: false,
+                landscapeData: null,
+                landscapeLoading: false,
+                landscapeBrand: '',
 
                 get hasResults() {
                     return this.results && this.results.total_demand > 0;
@@ -1099,6 +1293,7 @@
                     this.isLoading = true;
                     this.results = null;
                     this.trendsData = null;  // Reset trends data for new search
+                    this.landscapeData = null;  // Reset landscape for new search
 
                     try {
                         const params = new URLSearchParams({
@@ -1323,6 +1518,38 @@ Generated by Total Search — Cross-Platform Search Intelligence`;
                         alert('Failed to load behavioral analysis: ' + error.message);
                     } finally {
                         this.behavioralLoading = false;
+                    }
+                },
+
+                async loadSearchLandscape() {
+                    if (!this.searchQuery.trim()) return;
+                    this.landscapeLoading = true;
+
+                    try {
+                        const keyword = this.searchQuery.split(',')[0].trim();
+                        const params = new URLSearchParams({
+                            keyword,
+                            country: this.selectedCountry,
+                            language: this.selectedLanguage,
+                        });
+                        if (this.landscapeBrand.trim()) {
+                            params.set('brand', this.landscapeBrand.trim());
+                        }
+
+                        const response = await fetch(`/api/search-landscape?${params}`);
+                        const data = await response.json();
+
+                        if (response.ok) {
+                            this.landscapeData = data;
+                        } else {
+                            console.error('Search landscape error:', data);
+                            alert('Search landscape error: ' + (data.detail || 'Unknown error'));
+                        }
+                    } catch (error) {
+                        console.error('Search landscape fetch error:', error);
+                        alert('Failed to load search landscape: ' + error.message);
+                    } finally {
+                        this.landscapeLoading = false;
                     }
                 },
 

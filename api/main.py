@@ -2211,6 +2211,256 @@ async def analyze_behavioral_intelligence(
         )
 
 
+@app.get("/api/search-landscape")
+async def get_search_landscape(
+    keyword: str = Query(..., description="Keyword to analyze SERP landscape for"),
+    brand: str = Query(default="", description="Brand name to check presence in results"),
+    country: str = Query(default="de", description="Country code (e.g., de, us, uk)"),
+    language: str = Query(default="de", description="Language code"),
+):
+    """
+    Search Landscape: Who owns the search results for this keyword?
+
+    Fetches the live Google SERP and analyzes:
+    - Top ranking domains and their types (brand, marketplace, content, retailer)
+    - Whether the specified brand appears or is absent
+    - People Also Ask questions (reveals searcher intent)
+    - SERP features present (featured snippets, videos, knowledge graph)
+    - Domain category breakdown (what type of sites dominate)
+    - Actionable insights based on the competitive landscape
+    """
+    try:
+        from src.clients.dataforseo import DataForSEOClient
+        from src.config import get_settings
+
+        settings = get_settings()
+
+        country_location_map = {
+            "us": 2840, "de": 2276, "uk": 2826, "gb": 2826,
+            "fr": 2250, "es": 2724, "it": 2380, "nl": 2528,
+            "au": 2036, "ca": 2124, "br": 2076, "mx": 2484, "jp": 2392,
+        }
+        location_code = country_location_map.get(country.lower(), 2840)
+        lang_map = {"de": "de", "en": "en", "fr": "fr", "es": "es", "it": "it", "nl": "nl", "pt": "pt", "ja": "ja"}
+        lang_code = lang_map.get(language.lower(), "en")
+
+        async with DataForSEOClient(settings=settings) as client:
+            serp_data = await client.get_serp_results(
+                keyword=keyword,
+                location_code=location_code,
+                language_code=lang_code,
+                depth=20,
+            )
+
+        organic = serp_data.get("organic_results", [])
+        serp_features = serp_data.get("serp_features", [])
+        people_also_ask = serp_data.get("people_also_ask", [])
+
+        # --- Classify domains ---
+        MARKETPLACES = {"amazon", "ebay", "etsy", "zalando", "otto", "kaufland", "idealo", "aliexpress", "walmart", "target"}
+        SOCIAL_PLATFORMS = {"youtube", "tiktok", "instagram", "pinterest", "facebook", "twitter", "reddit", "linkedin"}
+        CONTENT_SIGNALS = {"blog", "magazin", "magazine", "wiki", "ratgeber", "guide", "advice", "tipps", "test", "vergleich", "review"}
+        RETAILERS = {"dm", "rossmann", "douglas", "mueller", "thalia", "mediamarkt", "saturn", "notino", "flaconi", "parfumdreams", "sephora", "boots"}
+
+        domain_results = []
+        brand_lower = brand.strip().lower()
+        brand_found_at = None
+
+        for r in organic:
+            domain = r.get("domain", "").lower()
+            domain_root = domain.replace("www.", "").split(".")[0] if domain else ""
+            title = r.get("title", "").lower()
+            url = r.get("url", "").lower()
+            position = r.get("position", 0)
+
+            # Classify domain type
+            if domain_root in MARKETPLACES or any(mp in domain for mp in MARKETPLACES):
+                domain_type = "marketplace"
+            elif domain_root in SOCIAL_PLATFORMS or any(sp in domain for sp in SOCIAL_PLATFORMS):
+                domain_type = "social"
+            elif domain_root in RETAILERS or any(rt in domain for rt in RETAILERS):
+                domain_type = "retailer"
+            elif any(sig in url for sig in CONTENT_SIGNALS) or any(sig in title for sig in CONTENT_SIGNALS):
+                domain_type = "content"
+            else:
+                domain_type = "brand"
+
+            # Check if brand appears
+            is_brand = False
+            if brand_lower and (brand_lower in domain or brand_lower in title or brand_lower in url):
+                is_brand = True
+                if brand_found_at is None:
+                    brand_found_at = position
+
+            domain_results.append({
+                "position": position,
+                "domain": r.get("domain", ""),
+                "title": r.get("title", ""),
+                "url": r.get("url", ""),
+                "type": domain_type,
+                "is_brand": is_brand,
+            })
+
+        # --- Domain type breakdown ---
+        type_counts = {}
+        for dr in domain_results:
+            t = dr["type"]
+            type_counts[t] = type_counts.get(t, 0) + 1
+
+        total_results = len(domain_results)
+        type_breakdown = []
+        type_labels = {
+            "brand": "Brand Sites",
+            "marketplace": "Marketplaces",
+            "content": "Content / Reviews",
+            "retailer": "Retailers",
+            "social": "Social Platforms",
+        }
+        for dtype, count in sorted(type_counts.items(), key=lambda x: -x[1]):
+            type_breakdown.append({
+                "type": dtype,
+                "label": type_labels.get(dtype, dtype.title()),
+                "count": count,
+                "percentage": round(count / total_results * 100, 1) if total_results else 0,
+            })
+
+        # --- Unique domains (deduplicated top domains) ---
+        seen_domains = set()
+        unique_domains = []
+        for dr in domain_results:
+            root = dr["domain"].replace("www.", "")
+            if root not in seen_domains:
+                seen_domains.add(root)
+                unique_domains.append({
+                    "domain": root,
+                    "best_position": dr["position"],
+                    "type": dr["type"],
+                    "is_brand": dr["is_brand"],
+                })
+
+        # --- Generate insights ---
+        insights = []
+
+        if brand_lower:
+            if brand_found_at is not None:
+                if brand_found_at <= 3:
+                    insights.append({
+                        "type": "positive",
+                        "title": f"{brand.title()} ranks #{brand_found_at}",
+                        "description": f"Strong position — your brand is in the top 3 for \"{keyword}\"."
+                    })
+                elif brand_found_at <= 10:
+                    insights.append({
+                        "type": "warning",
+                        "title": f"{brand.title()} ranks #{brand_found_at}",
+                        "description": f"Page 1 but not top 3. Competitors above you are capturing more clicks."
+                    })
+                else:
+                    insights.append({
+                        "type": "negative",
+                        "title": f"{brand.title()} ranks #{brand_found_at}",
+                        "description": f"Below the fold — most searchers will never see your result."
+                    })
+            else:
+                insights.append({
+                    "type": "negative",
+                    "title": f"{brand.title()} not found in top 20",
+                    "description": f"Your brand doesn't appear in search results for \"{keyword}\". This is a major visibility gap."
+                })
+
+        # Marketplace dominance
+        mp_count = type_counts.get("marketplace", 0)
+        if mp_count >= 3:
+            mp_domains = [d["domain"] for d in unique_domains if d["type"] == "marketplace"][:3]
+            insights.append({
+                "type": "warning",
+                "title": f"Marketplace-dominated SERP",
+                "description": f"{mp_count} of {total_results} results are marketplaces ({', '.join(mp_domains)}). Organic brand visibility is limited — consider marketplace optimization."
+            })
+
+        # Content opportunity
+        content_count = type_counts.get("content", 0)
+        if content_count >= 4:
+            insights.append({
+                "type": "opportunity",
+                "title": "Content-driven SERP",
+                "description": f"Google favors informational content ({content_count} results are reviews/guides). Creating authoritative content could earn ranking."
+            })
+        elif content_count <= 1 and total_results >= 10:
+            insights.append({
+                "type": "opportunity",
+                "title": "Content gap detected",
+                "description": "Very few content/review sites rank. An informational content strategy could fill this gap."
+            })
+
+        # People Also Ask intent
+        if people_also_ask:
+            question_types = []
+            for paa in people_also_ask[:8]:
+                q = paa.get("question", "").lower()
+                if any(w in q for w in ["what", "was ist", "wie", "how"]):
+                    question_types.append("educational")
+                elif any(w in q for w in ["best", "beste", "top", "review", "test"]):
+                    question_types.append("comparison")
+                elif any(w in q for w in ["buy", "kaufen", "price", "preis", "cost", "kosten"]):
+                    question_types.append("transactional")
+                else:
+                    question_types.append("general")
+
+            dominant_intent = max(set(question_types), key=question_types.count) if question_types else "general"
+            intent_labels = {
+                "educational": "Educational (people want to understand)",
+                "comparison": "Comparative (people want to evaluate options)",
+                "transactional": "Transactional (people want to buy)",
+                "general": "Mixed intent",
+            }
+            insights.append({
+                "type": "info",
+                "title": f"Search intent: {intent_labels.get(dominant_intent, 'Mixed')}",
+                "description": f"\"People Also Ask\" questions reveal {dominant_intent} intent. Align your content strategy accordingly."
+            })
+
+        # SERP features
+        feature_types = [f["type"] for f in serp_features]
+        if "featured_snippet" in feature_types:
+            fs = next(f for f in serp_features if f["type"] == "featured_snippet")
+            insights.append({
+                "type": "info",
+                "title": f"Featured Snippet owned by {fs.get('domain', 'unknown')}",
+                "description": "A featured snippet captures ~30% of clicks. Structuring content to answer the query directly could win this position."
+            })
+
+        if "video" in feature_types:
+            insights.append({
+                "type": "opportunity",
+                "title": "Video results in SERP",
+                "description": "Google shows video results for this query. YouTube content optimized for this keyword could appear here."
+            })
+
+        return {
+            "status": "ok",
+            "keyword": keyword,
+            "brand": brand if brand else None,
+            "country": country,
+            "results_count": total_results,
+            "brand_position": brand_found_at,
+            "organic_results": domain_results[:10],
+            "unique_domains": unique_domains[:15],
+            "type_breakdown": type_breakdown,
+            "serp_features": serp_features,
+            "people_also_ask": people_also_ask[:8],
+            "insights": insights,
+        }
+
+    except Exception as e:
+        logger.error(f"Search landscape failed: {e}")
+        import traceback
+        raise HTTPException(
+            status_code=500,
+            detail=f"Search landscape failed: {str(e)}\n{traceback.format_exc()}"
+        )
+
+
 @app.get("/api/trends/daily")
 async def get_daily_trending_searches(
     country: str = Query(default="united_states", description="Country (e.g., united_states, germany, japan)"),

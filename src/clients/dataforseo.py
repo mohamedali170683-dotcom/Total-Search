@@ -495,6 +495,130 @@ class DataForSEOClient(BaseAPIClient):
 
         return metrics_list
 
+    async def get_serp_results(
+        self,
+        keyword: str,
+        location_code: int | None = None,
+        language_code: str | None = None,
+        depth: int = 20,
+    ) -> dict[str, Any]:
+        """
+        Get Google SERP (Search Engine Results Page) for a keyword.
+
+        Returns the top organic results with domain, title, position,
+        and SERP features (featured snippets, people also ask, etc.).
+
+        Args:
+            keyword: The keyword to check SERP for.
+            location_code: Location code (default: 2840 for US).
+            language_code: Language code (default: en).
+            depth: Number of results to fetch (default: 20).
+
+        Returns:
+            Dict with organic_results, serp_features, and people_also_ask.
+        """
+        location_code = location_code or self.settings.default_location_code
+        language_code = language_code or self.settings.default_language_code
+
+        payload = [
+            {
+                "keyword": keyword,
+                "location_code": location_code,
+                "language_code": language_code,
+                "device": "desktop",
+                "os": "windows",
+                "depth": depth,
+            }
+        ]
+
+        try:
+            response = await self.post(
+                "/v3/serp/google/organic/live/regular",
+                json_data=payload,
+            )
+            return self._parse_serp_response(response)
+        except Exception as e:
+            logger.error(f"Failed to fetch SERP results for '{keyword}': {e}")
+            return {"organic_results": [], "serp_features": [], "people_also_ask": []}
+
+    def _parse_serp_response(self, response: dict[str, Any]) -> dict[str, Any]:
+        """Parse DataForSEO SERP response into structured results."""
+        organic_results = []
+        serp_features = []
+        people_also_ask = []
+
+        tasks = response.get("tasks", [])
+        for task in tasks:
+            if task.get("status_code") != 20000:
+                logger.warning(f"SERP task failed: {task.get('status_message')}")
+                continue
+
+            results = task.get("result", [])
+            for result in results:
+                items = result.get("items", [])
+                for item in items:
+                    item_type = item.get("type", "")
+
+                    if item_type == "organic":
+                        organic_results.append({
+                            "position": item.get("rank_group"),
+                            "domain": item.get("domain", ""),
+                            "title": item.get("title", ""),
+                            "url": item.get("url", ""),
+                            "description": item.get("description", ""),
+                            "breadcrumb": item.get("breadcrumb", ""),
+                        })
+
+                    elif item_type == "featured_snippet":
+                        serp_features.append({
+                            "type": "featured_snippet",
+                            "domain": item.get("domain", ""),
+                            "title": item.get("title", ""),
+                            "description": item.get("description", ""),
+                        })
+
+                    elif item_type == "people_also_ask":
+                        items_paa = item.get("items", [])
+                        if isinstance(items_paa, list):
+                            for paa in items_paa:
+                                people_also_ask.append({
+                                    "question": paa.get("title", ""),
+                                    "domain": paa.get("domain", ""),
+                                    "url": paa.get("url", ""),
+                                })
+                        elif item.get("title"):
+                            people_also_ask.append({
+                                "question": item.get("title", ""),
+                                "domain": item.get("domain", ""),
+                                "url": item.get("url", ""),
+                            })
+
+                    elif item_type == "knowledge_graph":
+                        serp_features.append({
+                            "type": "knowledge_graph",
+                            "title": item.get("title", ""),
+                            "description": item.get("description", ""),
+                        })
+
+                    elif item_type == "local_pack":
+                        serp_features.append({
+                            "type": "local_pack",
+                            "title": item.get("title", ""),
+                        })
+
+                    elif item_type == "video":
+                        serp_features.append({
+                            "type": "video",
+                            "domain": item.get("domain", ""),
+                            "title": item.get("title", ""),
+                        })
+
+        return {
+            "organic_results": organic_results[:depth],
+            "serp_features": serp_features,
+            "people_also_ask": people_also_ask,
+        }
+
     def _calculate_trend(
         self,
         monthly_searches: list[MonthlySearchData] | None,
