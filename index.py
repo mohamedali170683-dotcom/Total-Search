@@ -1625,6 +1625,7 @@ def _calculate_demand_distribution(keyword_data: dict, weight_preset: str = "gen
         "top_platform": top_platform_obj["platform"] if top_platform_obj else None,
         "top_platform_name": top_platform_obj["display_name"] if top_platform_obj else None,
         "top_platform_score": top_platform_obj["normalized_score"] if top_platform_obj else 0,
+        "top_platform_volume": top_platform_obj["volume"] if top_platform_obj else 0,
         "platform_count": len([p for p in platforms if p["volume"] > 0]),
     }
 
@@ -1683,28 +1684,46 @@ def _get_platform_color(platform: str) -> str:
     return colors.get(platform, "#6B7280")
 
 
+def _format_volume(volume: int | float) -> str:
+    """Format volume into human-readable string (e.g. 613.7K, 2.1M)."""
+    v = float(volume)
+    if v >= 1_000_000:
+        return f"{v / 1_000_000:.1f}M"
+    if v >= 1_000:
+        return f"{v / 1_000:.1f}K"
+    return f"{int(v):,}"
+
+
 def _generate_demand_insights(platforms: list, summary: dict) -> list[dict]:
     """Generate insights about demand distribution across all platforms."""
     insights = []
 
-    demand_index = summary.get("demand_index", 0)
+    total_volume = summary.get("total_volume", 0)
     top_name = summary.get("top_platform_name", "")
-    top_score = summary.get("top_platform_score", 0)
+    top_volume = summary.get("top_platform_volume", 0)
+    platform_count = summary.get("platform_count", 0)
 
-    # Insight: Overall demand strength
-    if demand_index >= 60:
+    # Insight: Overall demand strength (based on total volume across platforms)
+    if total_volume >= 100_000:
         insights.append({
             "type": "opportunity",
-            "title": f"Strong cross-platform demand (Index: {demand_index}/100)",
-            "description": f"Demand signals are strong across multiple platforms. {top_name} leads with a normalized score of {top_score}/100.",
+            "title": f"Strong cross-platform demand ({_format_volume(total_volume)} total)",
+            "description": f"Search volume is strong across {platform_count} platforms. {top_name} leads with {_format_volume(top_volume)} monthly volume.",
             "priority": "high",
         })
-    elif demand_index >= 30:
+    elif total_volume >= 10_000:
         insights.append({
             "type": "opportunity",
-            "title": f"Moderate demand detected (Index: {demand_index}/100)",
-            "description": f"There is meaningful demand across platforms. {top_name} shows the strongest signal at {top_score}/100.",
+            "title": f"Solid demand detected ({_format_volume(total_volume)} total)",
+            "description": f"Meaningful search activity across {platform_count} platforms. {top_name} shows the strongest signal at {_format_volume(top_volume)}.",
             "priority": "medium",
+        })
+    elif total_volume > 0:
+        insights.append({
+            "type": "opportunity",
+            "title": f"Niche demand ({_format_volume(total_volume)} total)",
+            "description": f"Lower volume across platforms — this may be a niche topic or emerging category. {top_name} has {_format_volume(top_volume)}.",
+            "priority": "low",
         })
 
     # Insight: Platform-specific growth
@@ -1713,18 +1732,18 @@ def _generate_demand_insights(platforms: list, summary: dict) -> list[dict]:
             insights.append({
                 "type": "trend",
                 "title": f"{p['display_name']} demand is growing",
-                "description": f"Demand on {p['display_name']} is trending upward (score: {p['normalized_score']}/100). Consider increasing investment on this platform.",
+                "description": f"Demand on {p['display_name']} is trending upward ({_format_volume(p['volume'])} monthly). Consider increasing investment on this platform.",
                 "priority": "medium",
                 "platform": p["platform"],
             })
 
     # Insight: Amazon e-commerce signal
     amazon_data = next((p for p in platforms if p["platform"] == "amazon"), None)
-    if amazon_data and amazon_data["normalized_score"] > 20:
+    if amazon_data and amazon_data["volume"] > 0:
         insights.append({
             "type": "ecommerce",
-            "title": f"Amazon demand score: {amazon_data['normalized_score']}/100",
-            "description": "Strong purchase intent. Ensure your Amazon presence and advertising are optimized.",
+            "title": f"Amazon: {_format_volume(amazon_data['volume'])} monthly searches",
+            "description": "Active purchase intent on Amazon. Ensure your product listings and advertising are optimized.",
             "priority": "high",
             "platform": "amazon",
         })
@@ -1735,16 +1754,16 @@ def _generate_demand_insights(platforms: list, summary: dict) -> list[dict]:
     if tiktok_data and tiktok_data["volume"] > 0:
         insights.append({
             "type": "social",
-            "title": f"TikTok: ~{tiktok_data['volume']:,} interactions per video",
-            "description": f"On average, {tiktok_data['volume']:,} users interact with each TikTok video about this topic (score: {tiktok_data['normalized_score']}/100).",
+            "title": f"TikTok: ~{_format_volume(tiktok_data['volume'])} avg. interactions",
+            "description": f"On average, {tiktok_data['volume']:,} users interact with each TikTok video about this topic.",
             "priority": "medium",
             "platform": "tiktok",
         })
     if instagram_data and instagram_data["volume"] > 0:
         insights.append({
             "type": "social",
-            "title": f"Instagram: ~{instagram_data['volume']:,} interactions per post",
-            "description": f"On average, {instagram_data['volume']:,} users interact with each Instagram post about this topic (score: {instagram_data['normalized_score']}/100).",
+            "title": f"Instagram: ~{_format_volume(instagram_data['volume'])} avg. interactions",
+            "description": f"On average, {instagram_data['volume']:,} users interact with each Instagram post about this topic.",
             "priority": "medium",
             "platform": "instagram",
         })
@@ -1754,8 +1773,8 @@ def _generate_demand_insights(platforms: list, summary: dict) -> list[dict]:
     if pinterest_data and pinterest_data["volume"] > 30:
         insights.append({
             "type": "visual",
-            "title": f"Pinterest interest: {pinterest_data['volume']}/100",
-            "description": f"Pinterest users show interest in this topic (score: {pinterest_data['normalized_score']}/100). Create visual content and shopping pins.",
+            "title": f"Pinterest interest score: {pinterest_data['volume']}/100",
+            "description": f"Pinterest users show strong interest in this topic. Create visual content and shopping pins to capture this audience.",
             "priority": "medium",
             "platform": "pinterest",
         })
@@ -1772,20 +1791,24 @@ def _generate_demand_recommendations(platforms: list, summary: dict) -> list[dic
     # Recommendation based on top platform
     if summary["top_platform"]:
         top = platform_data[summary["top_platform"]]
+        total_vol = summary.get("total_volume", 0)
+        top_share = round(top["volume"] / total_vol * 100, 1) if total_vol > 0 else 0
         recommendations.append({
             "platform": top["platform"],
             "action": f"Prioritize {top['display_name']}",
-            "description": f"With a demand score of {top['normalized_score']}/100, this is your primary channel for this keyword set.",
+            "description": f"With {_format_volume(top['volume'])} monthly volume ({top_share}% of total), this is your primary channel for this keyword set.",
             "tactics": _get_platform_tactics(top["platform"]),
         })
 
     # Recommendations for underutilized high-volume platforms
+    total_vol = summary.get("total_volume", 0)
     for p in platforms[1:4]:  # Next 3 platforms after top
         if p["volume"] > 0 and p["normalized_score"] > 15:
+            p_share = round(p["volume"] / total_vol * 100, 1) if total_vol > 0 else 0
             recommendations.append({
                 "platform": p["platform"],
                 "action": f"Expand to {p['display_name']}",
-                "description": f"Demand score of {p['normalized_score']}/100 represents a significant opportunity.",
+                "description": f"{_format_volume(p['volume'])} monthly volume ({p_share}% share) represents a significant opportunity.",
                 "tactics": _get_platform_tactics(p["platform"]),
             })
 
